@@ -29,9 +29,7 @@ export const useBookStore = defineStore("bookStore", {
     },
     // 插入数据库中 并更新目录以及当前章节
     async addTocByHref(href, tocItem) {
-      console.log("添加章节", href, tocItem);
       await invoke("add_chapter", tocItem).then((res) => {
-        console.log("addChapter 返回", res.data);
         if (res.success) {
           const item = {
             label: tocItem.label,
@@ -39,9 +37,7 @@ export const useBookStore = defineStore("bookStore", {
             subitems: null,
           };
           if (href) {
-            //获取要插入的父级元素
             const parentItem = this.findTocByHref(href);
-            console.log("findTocByHref", parentItem);
             if (parentItem.subitems) {
               parentItem.subitems.push(item);
             } else {
@@ -52,7 +48,6 @@ export const useBookStore = defineStore("bookStore", {
               this.toc = [];
             }
             this.toc.push(item);
-            console.log("添加章节后 目录", this.toc);
           }
           // 发送插入成功事件
           EventBus.emit("addChapterRes", res);

@@ -3,6 +3,77 @@ import { storeToRefs } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { useBookStore } from "../store/bookStore.js";
 import EventBus from "../common/EventBus";
+import {
+  configure,
+  ZipReader,
+  Uint8ArrayWriter,
+  BlobReader,
+} from "@zip.js/zip.js";
+import { join, appDataDir, basename } from "@tauri-apps/api/path";
+import { exists, remove, writeFile, mkdir } from "@tauri-apps/plugin-fs";
+const appDataPath = await appDataDir();
+const coversDir = await join(appDataPath, "covers");
+const epubDir = await join(appDataPath, "epub");
+
+const generateCustomShortId = () => {
+  // 获取时间戳的后8位
+  const timestamp = Date.now().toString().slice(-8);
+  // 生成随机数
+  const random = Math.random().toString(36).substring(2, 8);
+  return timestamp + random;
+};
+
+// 调用libs/vendor/zip.js 解压epub文件
+const unzipEpub = async (file, extractPath) => {
+  console.log("开始解压epub文件:", file, extractPath);
+  return new Promise(async (resolve, reject) => {
+    // 创建图片目录
+    const imagesDir = await join(extractPath, "images");
+    try {
+      await mkdir(imagesDir, { recursive: true });
+    } catch (error) {
+      console.warn("Images directory might already exist:", error);
+    }
+
+    try {
+      configure({ useWebWorkers: false });
+      const reader = new ZipReader(new BlobReader(file));
+      const zipEntries = await reader.getEntries();
+      // 存储原始图片路径和重命名后的路径的映射
+      const imageMap = new Map();
+      zipEntries.forEach(async (entry) => {
+        // 检查是否为图片文件
+        const ext = entry.filename.split(".").pop();
+        const imageExtensions = [
+          "jpg",
+          "jpeg",
+          "png",
+          "gif",
+          "bmp",
+          "webp",
+          "svg",
+        ];
+        if (imageExtensions.includes(ext)) {
+          // 生成唯一的文件名，避免冲突
+          const uniqueName = `${generateCustomShortId()}.${ext}`;
+          const targetPath = await join(imagesDir, uniqueName);
+          await entry
+            .getData(new Uint8ArrayWriter())
+            .then(async (uint8Array) => {
+              if (uint8Array.length > 0) {
+                await writeFile(targetPath, uint8Array);
+                // 记录原始路径和新路径的映射
+                imageMap.set(entry.filename, "images/" + uniqueName);
+              }
+            });
+        }
+      });
+      resolve({ extractPath, imageMap });
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
 export const open = async (file) => {
   const { setToc, setMetaData, setFirst } = useBookStore();
@@ -29,6 +100,30 @@ export const open = async (file) => {
         const bookId = res.data.id;
         // 保存书籍信
         setMetaData({ ..._metaData, bookId: bookId });
+        if (book.metadata.cover) {
+          try {
+            try {
+              await mkdir(coversDir, { recursive: true });
+            } catch (error) {
+              console.warn("Covers directory might already exist:", error);
+            }
+            const coverPath = await join(coversDir, `${bookId}.jpg`);
+            const fileExists = await exists(coverPath);
+            if (fileExists) {
+              await remove(coverPath);
+            }
+            if (book.metadata.cover && book.metadata.cover.includes(",")) {
+              const base64Data = book.metadata.cover.split(",")[1];
+              const fileBuffer = Buffer.from(base64Data, "base64");
+              await writeFile(coverPath, fileBuffer);
+            } else {
+              console.warn("Invalid or missing cover data");
+            }
+          } catch (error) {
+            console.error("处理文件时出错:", error);
+            throw error;
+          }
+        }
         // 4. 插入章节到数据库中
         await insertChapter(book, bookId);
         // 继续原流程
@@ -38,7 +133,7 @@ export const open = async (file) => {
         console.log("firstChapter", firstChapter);
         resolve(firstChapter.data);
 
-        EventBus.emit("updateToc", firstChapter.data.id);
+        EventBus.emit("updateToc", firstChapter.data[0].id);
         EventBus.emit("hideTip");
       } else {
         reject(new Error("添加书籍到数据库中失败"));
@@ -53,13 +148,13 @@ export const open = async (file) => {
 const insertChapter = async (book, bookId) => {
   const insertTocItem = async (item, parentid = null) => {
     //获取章节内容
-    console.log("insertTocItem  item: ", item);
+    console.log("item.href", item.href);
     const res = await book.resolveHref(item.href);
     const doc = await book.sections[res.index].createDocument();
     const str = doc.body.innerHTML;
     await new Promise((resolve, reject) => {
       const successListener = (res) => {
-        item.href = res.id;
+        item.href = res.data;
         resolve(res);
       };
       EventBus.on("addChapterRes", successListener);
@@ -76,7 +171,6 @@ const insertChapter = async (book, bookId) => {
     });
 
     if (item.subitems) {
-      console.log("item.subitems", item.subitems);
       parentid = item.href;
       for (const subitem of item.subitems) {
         await insertTocItem(subitem, parentid);

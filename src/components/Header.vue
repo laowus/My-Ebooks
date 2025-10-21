@@ -1,7 +1,31 @@
 <script setup>
+import { invoke } from "@tauri-apps/api/core";
 import { ref, onMounted, inject, toRaw } from "vue";
-import { open} from "../libs/parseBook.js"
+import { storeToRefs } from "pinia";
+import WindowCtr from "./WindowCtr.vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import EventBus from "../common/EventBus";
+import { open } from "../libs/parseBook.js";
+import { readTxtFile, getTextFromHTML } from "../common/utils";
+import { useBookStore } from "../store/bookStore";
+import { useAppStore } from "../store/appStore";
+const { curChapter, metaData, isFirst, toc, isAllEdit, isTitleIn } =
+  storeToRefs(useBookStore());
+const { setMetaData, setFirst, setIsAllEdit, setTitleIn } = useBookStore();
+const { showHistoryView, showNewBook, showAbout } = useAppStore();
 
+const curIndex = ref(1);
+const indentNum = ref(2);
+const changeTab = (index) => {
+  curIndex.value = index;
+};
+// 正则表达式
+const reg = {
+  pre: ["", "第", "卷", "chapter"],
+  aft: ["", "章", "回", "节", "集", "部", "篇", "部分"],
+  selected: [1, 1],
+};
+const strNum = ref(20);
 const initDom = () => {
   $("#add-file").addEventListener("change", (e) => {
     // 检查用户是否选择了文件
@@ -10,6 +34,41 @@ const initDom = () => {
       const ext = newFile.name.split(".").pop();
       if (ext === "txt" || ext === "html") {
         let fileStr = "";
+        readTxtFile(newFile).then(async (data) => {
+          fileStr = ext === "html" ? getTextFromHTML(data) : data;
+          console.log("fileStr", fileStr);
+          if (isFirst.value) {
+            const meta = {
+              title: newFile.name.split(".")[0],
+              author: "Unknown",
+              description: "Unknown",
+              toc: "",
+            };
+            const res = await invoke("add_book", meta);
+            if (res.success) {
+              meta.bookId = res.data.id;
+              setMetaData(meta);
+              const chapter = {
+                bookId: metaData.value.bookId,
+                label: metaData.value.title,
+                href: `OPS/chapter-${Date.now()}`,
+                content: fileStr,
+              };
+              EventBus.emit("addChapter", { href: null, chapter: chapter });
+              setFirst(false);
+            } else {
+              ElMessage.error("插入失败");
+            }
+          } else {
+            const chapter = {
+              bookId: metaData.value.bookId,
+              label: newFile.name.split(".")[0],
+              href: `OPS/chapter-${Date.now()}`,
+              content: fileStr,
+            };
+            EventBus.emit("addChapter", { href: null, chapter: chapter });
+          }
+        });
       } else if (ext === "epub" || ext === "mobi") {
         open(newFile).then((res) => {
           console.log(" 02 open", res);
@@ -30,16 +89,195 @@ onMounted(() => {
 </script>
 <template>
   <div class="header">
-    <input
-      type="file"
-      id="add-file"
-      hidden
-      accept=".txt,.html,.epub,.mobi,.azw3"
-    />
-    <button class="btn-icon" id="add-file-btn">
-      <span class="iconfont icon-Epub" style="color: green"></span>
-      <span>导入文件</span>
-    </button>
+    <div class="tabs">
+      <div class="tabnames">
+        <div
+          class="tabname"
+          @click="changeTab(0)"
+          :class="{ active: curIndex === 0 }"
+        >
+          开始
+        </div>
+        <div
+          class="tabname"
+          @click="changeTab(1)"
+          :class="{ active: curIndex === 1 }"
+        >
+          导入
+        </div>
+        <div
+          class="tabname"
+          @click="changeTab(2)"
+          :class="{ active: curIndex === 2 }"
+        >
+          编辑
+        </div>
+        <div
+          class="tabname"
+          @click="changeTab(3)"
+          :class="{ active: curIndex === 3 }"
+        >
+          工具
+        </div>
+        <div
+          class="tabname"
+          @click="changeTab(4)"
+          :class="{ active: curIndex === 4 }"
+        >
+          发布
+        </div>
+        <div
+          class="tabname"
+          @click="changeTab(5)"
+          :class="{ active: curIndex === 5 }"
+        >
+          帮助
+        </div>
+        <div class="drag-tab"></div>
+
+        <WindowCtr />
+      </div>
+      <div class="tabcontent">
+        <div v-show="curIndex === 0">
+          <button class="btn-icon" @click="">
+            <span class="iconfont icon-xinjian" style="color: green"></span>
+            <span>新建</span>
+          </button>
+        </div>
+        <div v-show="curIndex === 1">
+          <input
+            type="file"
+            id="add-file"
+            hidden
+            accept=".txt,.html,.epub,.mobi,.azw3"
+          />
+          <button class="btn-icon" id="add-file-btn">
+            <span class="iconfont icon-Epub" style="color: green"></span>
+            <span>导入文件</span>
+          </button>
+          <button class="btn-icon" @click="">
+            <span class="iconfont icon-lishijilu" style="color: green"></span>
+            <span>历史记录</span>
+          </button>
+          <button class="btn-icon" @click="">
+            <span class="iconfont icon-zhongqi" style="color: red"></span>
+            <span> 重 启 </span>
+          </button>
+        </div>
+        <div v-show="curIndex === 2">
+          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+            <span
+              class="iconfont icon-shanchukonghang"
+              style="color: red"
+            ></span>
+            <span>删除空行</span>
+          </button>
+          <select
+            @change="indentNum = parseInt($event.target.value)"
+            :value="indentNum"
+          >
+            <option v-for="index in [0, 1, 2, 3, 4, 5, 6]" :key="index">
+              {{ index }}
+            </option>
+          </select>
+          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+            <span
+              class="iconfont icon-shouhangsuojin"
+              style="color: green"
+            ></span>
+            <span>首行缩进</span>
+          </button>
+
+          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+            <span
+              class="iconfont icon-shanchukonghang"
+              style="color: red"
+            ></span>
+            <span>删除章名</span>
+          </button>
+
+          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+            <span class="iconfont icon-xinjian"></span>
+            <span>添加章名</span>
+          </button>
+          <button class="btn-icon" @click="">
+            <span
+              class="iconfont"
+              :class="isAllEdit ? 'icon-gouxuananniu' : 'icon-gouxuananniu1'"
+              style="color: green; font-size: 18px; padding-top: 8px"
+            ></span>
+            <span style="padding-top: 8px">应用全书</span>
+          </button>
+        </div>
+        <div v-show="curIndex === 3">
+          <div class="reg-string">
+            <span>规则:</span>
+            <select id="pre">
+              <option
+                v-for="(pr, index) in reg.pre"
+                :selected="reg.selected[0] == index"
+              >
+                {{ pr }}
+              </option>
+            </select>
+            <span>[数字]</span>
+            <select id="aft">
+              <option
+                v-for="(af, index) in reg.aft"
+                :selected="reg.selected[1] == index"
+              >
+                {{ af }}
+              </option>
+            </select>
+            <span><</span>
+            <input
+              id="strNum"
+              style="width: 30px; height: 20px; font-size: 12px"
+              v-model="strNum"
+            />
+            <span>特别:</span>
+            <input
+              id="attach"
+              style="width: 150px; height: 20px; font-size: 12px"
+              placeholder="多个用|分开"
+            />
+
+            <button class="btn-icon" @click="">
+              <span
+                class="iconfont"
+                :class="isTitleIn ? 'icon-gouxuananniu' : 'icon-gouxuananniu1'"
+                style="color: green; font-size: 18px; padding-top: 8px"
+              ></span>
+              <span style="padding-top: 8px">保留章名</span>
+            </button>
+            <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+              <span class="iconfont icon-jianqie" style="color: green"></span>
+              <span>开始分割</span>
+            </button>
+          </div>
+        </div>
+        <div v-show="curIndex === 4">
+          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+            <span class="iconfont icon-daochuexl" style="color: green"></span>
+            <span>生成epub</span>
+          </button>
+          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+            <span class="iconfont icon-daochutxt" style="color: green"></span>
+            <span>生成txt</span>
+          </button>
+          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+            <span class="iconfont icon-HTML" style="color: green"></span>
+            <span>生成Html</span>
+          </button>
+        </div>
+        <div v-show="curIndex === 5">
+          <button class="btn-icon" @click="">
+            <span class="iconfont icon-daochuexl" style="color: green"></span>
+            <span>关于</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 <style>

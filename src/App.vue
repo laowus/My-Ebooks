@@ -16,7 +16,6 @@ const { hideEditView, hideCtxMenu } = useAppStore();
 
 let tocView;
 const updateTocView = (curhref) => {
-  console.log("更新目录,当前的curhref", curhref);
   const _book = {
     id: metaData.value.bookId,
     toc: toRaw(toc.value),
@@ -33,26 +32,24 @@ const updateTocView = (curhref) => {
       //showContextMenu(event, href);
     },
     (fromHref, toHref) => {
-      // onDrop(fromHref, toHref);
+      console.log("移动目录", fromHref, toHref);
     }
   );
   const tocViewElement = window.$("#toc-view");
   tocViewElement.innerHTML = "";
+  console.log("tocViewElement", tocViewElement);
   tocViewElement.append(tocView.element);
   tocView.setCurrentHref(curhref);
   updateCurChapter(curhref);
 };
 
 const updateCurChapter = (href) => {
-  console.log("更新当前章节", metaData.value);
-
   invoke("get_chapter", {
     bookId: metaData.value.bookId,
     id: String(href),
   }).then((res) => {
-    console.log("获取章节成功", res);
     if (res.success) {
-      curChapter.value = res.data;
+      curChapter.value = res.data[0];
       tocView.setCurrentHref(href);
     } else {
       console.log("获取章节失败", res.message);
@@ -61,11 +58,9 @@ const updateCurChapter = (href) => {
 };
 
 EventBus.on("addChapter", (res) => {
-  console.log("添加章节", res);
   addTocByHref(res.href, res.chapter); //添加到数据库
 });
 
-//更新目录，重新载入编辑内容
 EventBus.on("updateToc", (href) => {
   if (href) {
     updateTocView(href);
