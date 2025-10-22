@@ -10,7 +10,7 @@ export const useBookStore = defineStore("bookStore", {
     curChapter: {
       bookId: 0,
       href: "",
-      title: "",
+      label: "",
       content: "",
     }, //当前编辑的章节
     isAllEdit: false, //是否全部编辑

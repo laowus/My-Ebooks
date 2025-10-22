@@ -124,8 +124,21 @@ export const open = async (file) => {
             throw error;
           }
         }
+        let imageMap = null;
+
+        if (file && file.name.split(".").pop() === "epub") {
+          try {
+            const curEpubDir = await join(epubDir, `${bookId}`);
+            const result = await unzipEpub(file, curEpubDir);
+            imageMap = result.imageMap;
+          } catch (error) {
+            console.error("解压EPUB文件时出错:", error);
+            throw error;
+          }
+        }
+
         // 4. 插入章节到数据库中
-        await insertChapter(book, bookId);
+        await insertChapter(book, bookId, imageMap);
         // 继续原流程
         const firstChapter = await invoke("get_first_chapter", {
           bookId: bookId,
@@ -145,13 +158,13 @@ export const open = async (file) => {
   });
 };
 
-const insertChapter = async (book, bookId) => {
+const insertChapter = async (book, bookId, imageMap = null) => {
   const insertTocItem = async (item, parentid = null) => {
     //获取章节内容
-    console.log("item.href", item.href);
     const res = await book.resolveHref(item.href);
     const doc = await book.sections[res.index].createDocument();
-    const str = doc.body.innerHTML;
+    // 调用修改后的getTextFromHTML函数，传入imageMap
+    const str = getTextFromHTML(doc.documentElement.outerHTML, imageMap);
     await new Promise((resolve, reject) => {
       const successListener = (res) => {
         item.href = res.data;
@@ -179,7 +192,6 @@ const insertChapter = async (book, bookId) => {
   };
 
   for (const [index, tocItem] of book.toc.entries()) {
-    console.log("tocItem", tocItem);
     iCTip(
       "导入 " + tocItem.label + " (" + (index + 1) + "/" + book.toc.length + ")"
     );

@@ -1,10 +1,10 @@
+use crate::setup::AppState;
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use std::fs;
-use std::time::SystemTime;
 use std::sync::MutexGuard;
-use serde::{Serialize, Deserialize};
+use std::time::SystemTime;
 use tauri::{command, AppHandle, Manager, State};
-use crate::setup::AppState; 
 
 // 定义通用的数据库响应结构体
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ impl<T: Serialize> DbResponse<T> {
             error: None,
         }
     }
-    
+
     // 错误响应的辅助构造函数
     pub fn error(error: String) -> Self {
         Self {
@@ -37,7 +37,9 @@ impl<T: Serialize> DbResponse<T> {
 
 const DB_FILENAME: &str = "books.db";
 
-pub fn get_db_connection<'a>(state: &'a State<'_, AppState>) -> Result<MutexGuard<'a, Connection>, String> {
+pub fn get_db_connection<'a>(
+    state: &'a State<'_, AppState>,
+) -> Result<MutexGuard<'a, Connection>, String> {
     match state.db.lock() {
         Ok(conn) => Ok(conn),
         Err(err) => Err(err.to_string()),
@@ -109,7 +111,7 @@ pub struct Book {
     pub title: String,
     pub author: String,
     pub description: String,
-    pub toc: String
+    pub toc: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -120,7 +122,7 @@ pub struct Chapter {
     pub label: String,
     pub href: String,
     pub content: String,
-}   
+}
 
 // 添加书籍
 #[command]
@@ -128,15 +130,15 @@ pub async fn add_book(
     title: String,
     author: String,
     description: String,
-    toc: String, 
+    toc: String,
     state: State<'_, AppState>,
-) -> Result<DbResponse<Book>, String> { 
+) -> Result<DbResponse<Book>, String> {
     // 从应用状态中获取数据库连接
     let db = get_db_connection(&state)?;
-    
+
     // 获取当前时间作为创建和更新时间
     let current_time = get_current_time_string();
-    
+
     // 执行插入操作
     match db.execute(
         "INSERT INTO ee_book (title, author, description, toc, isDel, createTime, updateTime) \
@@ -146,7 +148,7 @@ pub async fn add_book(
         Ok(_) => {
             // 获取最后插入的 ID
             let last_id = db.last_insert_rowid();
-            
+
             // 构建成功响应
             let book = Book {
                 id: last_id,
@@ -155,9 +157,9 @@ pub async fn add_book(
                 description: description.clone(),
                 toc: toc.clone(),
             };
-            
+
             Ok(DbResponse::success(book))
-        },
+        }
         Err(err) => {
             // 构建错误响应
             Ok(DbResponse::error(err.to_string()))
@@ -174,7 +176,7 @@ pub fn get_all_books(state: State<'_, AppState>) -> Result<DbResponse<Vec<Book>>
         Ok(statement) => statement,
         Err(err) => return Err(err.to_string()),
     };
-    
+
     // 执行查询并映射结果到Book结构体向量
     let books = match stmt.query_map(params![], |row| {
         Ok(Book {
@@ -195,14 +197,13 @@ pub fn get_all_books(state: State<'_, AppState>) -> Result<DbResponse<Vec<Book>>
                 }
             }
             results
-        },
+        }
         Err(err) => return Err(err.to_string()),
     };
-    
+
     // 返回成功响应，包含书籍列表
     Ok(DbResponse::success(books))
 }
-
 
 #[command]
 pub fn add_chapter(
@@ -213,7 +214,7 @@ pub fn add_chapter(
     state: State<'_, AppState>,
 ) -> Result<DbResponse<i64>, String> {
     let db = get_db_connection(&state)?;
-    
+
     // 执行插入操作
     match db.execute(
         "INSERT INTO ee_chapter (bookId, label, href, content) \
@@ -223,15 +224,15 @@ pub fn add_chapter(
         Ok(_) => {
             // 获取最后插入的 ID
             let last_id = db.last_insert_rowid();
-                       
+
             Ok(DbResponse::success(last_id))
-        },
+        }
         Err(err) => {
             // 构建错误响应
             Ok(DbResponse::error(err.to_string()))
         }
     }
-}   
+}
 
 #[command]
 pub fn get_chapter(
@@ -239,7 +240,7 @@ pub fn get_chapter(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<DbResponse<Vec<Chapter>>, String> {
-    let db = get_db_connection(&state)?;   
+    let db = get_db_connection(&state)?;
 
     // 执行查询操作
     let mut stmt = match db.prepare("SELECT * FROM ee_chapter WHERE bookId = ? AND id = ?") {
@@ -267,14 +268,13 @@ pub fn get_chapter(
                 }
             }
             results
-        },
+        }
         Err(err) => return Err(err.to_string()),
     };
 
     // 返回成功响应，包含章节列表
     Ok(DbResponse::success(chapters))
-} 
-
+}
 
 #[command]
 pub fn update_toc(
@@ -283,16 +283,13 @@ pub fn update_toc(
     state: State<'_, AppState>,
 ) -> Result<DbResponse<i64>, String> {
     let db = get_db_connection(&state)?;
-    
+
     // 执行更新操作
-    match db.execute(
-        "UPDATE ee_book SET toc = ? WHERE id = ?",
-        params![toc, id],
-    ) {
+    match db.execute("UPDATE ee_book SET toc = ? WHERE id = ?", params![toc, id]) {
         Ok(_) => {
             // 返回成功响应，包含更新的行数
             Ok(DbResponse::success(1))
-        },
+        }
         Err(err) => {
             // 构建错误响应
             Ok(DbResponse::error(err.to_string()))
@@ -306,12 +303,13 @@ pub fn get_first_chapter(
     book_id: i64,
     state: State<'_, AppState>,
 ) -> Result<DbResponse<Vec<Chapter>>, String> {
-    let db = get_db_connection(&state)?;        
+    let db = get_db_connection(&state)?;
     // 执行查询操作
-    let mut stmt = match db.prepare("SELECT * FROM ee_chapter WHERE bookId = ? ORDER BY id ASC LIMIT 1") {
-        Ok(statement) => statement,
-        Err(err) => return Err(err.to_string()),
-    };
+    let mut stmt =
+        match db.prepare("SELECT * FROM ee_chapter WHERE bookId = ? ORDER BY id ASC LIMIT 1") {
+            Ok(statement) => statement,
+            Err(err) => return Err(err.to_string()),
+        };
     // 执行查询并映射结果到Chapter结构体
     let chapter = match stmt.query_map(params![book_id], |row| {
         Ok(Chapter {
@@ -332,9 +330,34 @@ pub fn get_first_chapter(
                 }
             }
             results
-        },
-        Err(err) => return Err(err.to_string())
+        }
+        Err(err) => return Err(err.to_string()),
     };
     // 返回成功响应，包含章节列表
     Ok(DbResponse::success(chapter))
+}
+
+#[command]
+pub fn update_chapter(
+    id: i64,
+    label: String,
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<DbResponse<i64>, String> {
+    let db = get_db_connection(&state)?;
+
+    // 执行更新操作
+    match db.execute(
+        "UPDATE ee_chapter SET content = ?, label = ?, updateTime = datetime('now', 'localtime') WHERE id = ?",
+        params![content, label, id],
+    ) {
+        Ok(_) => {
+            // 返回成功响应，包含更新的行数
+            Ok(DbResponse::success(1))
+        },
+        Err(err) => {
+            // 构建错误响应
+            Ok(DbResponse::error(err.to_string()))
+        }
+    }
 }
