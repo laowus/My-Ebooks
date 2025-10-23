@@ -34,7 +34,7 @@ const initDom = () => {
       const ext = newFile.name.split(".").pop();
       if (ext === "txt" || ext === "html") {
         let fileStr = "";
-        readTxtFile(newFile).then(async (data) => {
+        readTxtFile(newFile).then((data) => {
           fileStr = ext === "html" ? getTextFromHTML(data) : data;
           console.log("fileStr", fileStr);
           if (isFirst.value) {
@@ -44,21 +44,22 @@ const initDom = () => {
               description: "Unknown",
               toc: "",
             };
-            const res = await invoke("add_book", meta);
-            if (res.success) {
-              meta.bookId = res.data.id;
-              setMetaData(meta);
-              const chapter = {
-                bookId: metaData.value.bookId,
-                label: metaData.value.title,
-                href: `OPS/chapter-${Date.now()}`,
-                content: fileStr,
-              };
-              EventBus.emit("addChapter", { href: null, chapter: chapter });
-              setFirst(false);
-            } else {
-              ElMessage.error("插入失败");
-            }
+            invoke("add_book", meta)
+              .then((res) => {
+                meta.bookId = res.data.id;
+                setMetaData(meta);
+                const chapter = {
+                  bookId: metaData.value.bookId,
+                  label: metaData.value.title,
+                  href: `OPS/chapter-${Date.now()}`,
+                  content: fileStr,
+                };
+                EventBus.emit("addChapter", { href: null, chapter: chapter });
+                setFirst(false);
+              })
+              .catch((err) => {
+                console.error("插入book表失败:", err);
+              });
           } else {
             const chapter = {
               bookId: metaData.value.bookId,
@@ -86,6 +87,23 @@ const initDom = () => {
 onMounted(() => {
   initDom();
 });
+
+const restart = () => {
+  ElMessageBox.confirm("确定要重启应用吗？", "重启应用", {
+    confirmButtonText: "重启",
+    cancelButtonText: "取消",
+    type: "warning",
+  })
+    .then(() => {
+      invoke("restart_app");
+    })
+    .catch(() => {
+      ElMessage({
+        type: "info",
+        message: "已取消重启",
+      });
+    });
+};
 </script>
 <template>
   <div class="header">
@@ -139,7 +157,7 @@ onMounted(() => {
       </div>
       <div class="tabcontent">
         <div v-show="curIndex === 0">
-          <button class="btn-icon" @click="">
+          <button class="btn-icon" @click="showNewBook">
             <span class="iconfont icon-xinjian" style="color: green"></span>
             <span>新建</span>
           </button>
@@ -159,7 +177,7 @@ onMounted(() => {
             <span class="iconfont icon-lishijilu" style="color: green"></span>
             <span>历史记录</span>
           </button>
-          <button class="btn-icon" @click="">
+          <button class="btn-icon" @click="restart">
             <span class="iconfont icon-zhongqi" style="color: red"></span>
             <span> 重 启 </span>
           </button>

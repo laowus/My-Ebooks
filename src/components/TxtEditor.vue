@@ -167,7 +167,7 @@ watch(
   gap: 8px;
 }
 .edit-bar {
-  height: 30px;
+  height: 28px;
   display: flex;
   flex-direction: row;
   background-color: white;
@@ -351,7 +351,7 @@ watch(
   width: 100%;
   height: 100%;
   resize: none;
-  line-height: 30px;
+  line-height: 28px;
   font-size: 14px;
   float: left;
   padding: 0;
@@ -383,7 +383,7 @@ watch(
   border: 0;
   background: rgb(247, 247, 247);
   color: #999;
-  line-height: 30px;
+  line-height: 28px;
   font-size: 14px;
   padding: 0 5px;
   text-align: right;

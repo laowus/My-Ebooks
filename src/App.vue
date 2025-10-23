@@ -37,7 +37,6 @@ const updateTocView = (curhref) => {
   );
   const tocViewElement = window.$("#toc-view");
   tocViewElement.innerHTML = "";
-  console.log("tocViewElement", tocViewElement);
   tocViewElement.append(tocView.element);
   tocView.setCurrentHref(curhref);
   updateCurChapter(curhref);

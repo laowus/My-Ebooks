@@ -3,6 +3,8 @@ import { storeToRefs } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { useBookStore } from "../store/bookStore.js";
 import EventBus from "../common/EventBus";
+import { saveCoverImage } from "../common/utils.js";
+
 import {
   configure,
   ZipReader,
@@ -16,9 +18,7 @@ const coversDir = await join(appDataPath, "covers");
 const epubDir = await join(appDataPath, "epub");
 
 const generateCustomShortId = () => {
-  // 获取时间戳的后8位
   const timestamp = Date.now().toString().slice(-8);
-  // 生成随机数
   const random = Math.random().toString(36).substring(2, 8);
   return timestamp + random;
 };
@@ -75,81 +75,54 @@ const unzipEpub = async (file, extractPath) => {
   });
 };
 
+const handleEpubAndInsertChapter = async (file, bookId, book) => {
+  let imageMap = null;
+  if (file && file.name.split(".").pop() === "epub") {
+    try {
+      const curEpubDir = await join(epubDir, `${bookId}`);
+      const result = await unzipEpub(file, curEpubDir);
+      imageMap = result.imageMap;
+    } catch (error) {
+      console.error("解压EPUB文件时出错:", error);
+      throw error;
+    }
+  }
+  await insertChapter(book, bookId, imageMap);
+  EventBus.emit("hideTip");
+};
+
 export const open = async (file) => {
   const { setToc, setMetaData, setFirst } = useBookStore();
   const { metaData, isFirst, toc } = storeToRefs(useBookStore());
 
-  // 将整个处理过程封装在一个 Promise 中
   return new Promise(async (resolve, reject) => {
     try {
-      // 1. 先解析书籍内容
       const book = await makeBook(file);
       console.log(book);
-      let _metaData = {
-        title: book.metadata.title || "未命名",
-        author: book.metadata.author.name || "佚名",
-        description: book.metadata.description || "暂缺",
-        toc: "",
-      };
-      console.log("_metaData", _metaData);
-      //添加书籍到数据库中
-      const res = await invoke("add_book", _metaData);
-      console.log(res);
-      if (res.success) {
-        // 3. 解析完成后，返回书籍内容
-        const bookId = res.data.id;
-        // 保存书籍信
-        setMetaData({ ..._metaData, bookId: bookId });
-        if (book.metadata.cover) {
-          try {
-            try {
-              await mkdir(coversDir, { recursive: true });
-            } catch (error) {
-              console.warn("Covers directory might already exist:", error);
-            }
-            const coverPath = await join(coversDir, `${bookId}.jpg`);
-            const fileExists = await exists(coverPath);
-            if (fileExists) {
-              await remove(coverPath);
-            }
-            if (book.metadata.cover && book.metadata.cover.includes(",")) {
-              const base64Data = book.metadata.cover.split(",")[1];
-              const fileBuffer = Buffer.from(base64Data, "base64");
-              await writeFile(coverPath, fileBuffer);
-            } else {
-              console.warn("Invalid or missing cover data");
-            }
-          } catch (error) {
-            console.error("处理文件时出错:", error);
-            throw error;
+      if (isFirst.value) {
+        //插入书籍
+        let _metaData = {
+          title: book.metadata.title || "未命名",
+          author: book.metadata.author.name || "佚名",
+          description: book.metadata.description || "暂缺",
+          toc: "",
+        };
+        const res = await invoke("add_book", _metaData);
+        if (res.success) {
+          const bookId = res.data.id;
+          setMetaData({ ..._metaData, bookId: bookId });
+          if (book.metadata.cover) {
+            await saveCoverImage(book.metadata.cover, bookId);
           }
+          await handleEpubAndInsertChapter(file, bookId, book);
+          resolve();
+        } else {
+          reject(new Error("添加书籍到数据库中失败"));
         }
-        let imageMap = null;
-
-        if (file && file.name.split(".").pop() === "epub") {
-          try {
-            const curEpubDir = await join(epubDir, `${bookId}`);
-            const result = await unzipEpub(file, curEpubDir);
-            imageMap = result.imageMap;
-          } catch (error) {
-            console.error("解压EPUB文件时出错:", error);
-            throw error;
-          }
-        }
-
-        // 4. 插入章节到数据库中
-        await insertChapter(book, bookId, imageMap);
-        // 继续原流程
-        const firstChapter = await invoke("get_first_chapter", {
-          bookId: bookId,
-        });
-        console.log("firstChapter", firstChapter);
-        resolve(firstChapter.data);
-
-        EventBus.emit("updateToc", firstChapter.data[0].id);
-        EventBus.emit("hideTip");
       } else {
-        reject(new Error("添加书籍到数据库中失败"));
+        const bookId = metaData.value.bookId;
+        await handleEpubAndInsertChapter(file, bookId, book);
+        resolve();
       }
     } catch (error) {
       reject(error);

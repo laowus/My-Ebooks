@@ -1,7 +1,6 @@
 mod database;
-mod setup;
 mod fileutil;
-
+mod setup;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,6 +16,8 @@ pub fn run() {
             database::update_toc,
             database::get_first_chapter,
             database::update_chapter,
+            database::delete_book,
+            database::update_book,
             fileutil::read_image,
             fileutil::clear_app_data,
             fileutil::restart_app

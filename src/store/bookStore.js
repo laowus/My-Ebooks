@@ -27,6 +27,15 @@ export const useBookStore = defineStore("bookStore", {
     setToc(toc) {
       this.toc = toc;
     },
+    clearToc() {
+      this.toc = null;
+    },
+    setIsAllEdit() {
+      this.isAllEdit = !this.isAllEdit;
+    },
+    setTitleIn() {
+      this.isTitleIn = !this.isTitleIn;
+    },
     // 插入数据库中 并更新目录以及当前章节
     async addTocByHref(href, tocItem) {
       await invoke("add_chapter", tocItem).then((res) => {

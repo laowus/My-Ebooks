@@ -1,9 +1,11 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
-import { ref, watch, reactive, onMounted } from "vue";
+import { ref, watch, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { ElMessage, ElMessageBox } from "element-plus";
 import EventBus from "../common/EventBus";
+import { join, appDataDir } from "@tauri-apps/api/path";
+import { loadImage } from "../common/utils";
 import { useAppStore } from "../store/appStore";
 import { useBookStore } from "../store/bookStore";
 const { historyViewShow, editBookShow } = storeToRefs(useAppStore());
@@ -11,7 +13,7 @@ const { setEditBookData, hideHistoryView } = useAppStore();
 const { setMetaData, setToc, setFirst } = useBookStore();
 
 const books = ref([]);
-// 定义获取书籍数据的函数
+
 const fetchBooks = () => {
   invoke("get_all_books")
     .then((booksData) => {
@@ -30,7 +32,6 @@ onMounted(() => {
 // 监听 historyViewShow 的变化
 watch(historyViewShow, (newValue) => {
   if (newValue) {
-    // 当 historyViewShow 变为 true 时，刷新数据
     fetchBooks();
   }
 });
@@ -62,23 +63,29 @@ const importBook = (index, row) => {
 
 const delBook = (row) => {
   console.log(row);
-  // 删除成功后刷新数据
-  ipcRenderer.once("db-del-book-response", (event, response) => {
-    if (response.success) {
+  invoke("delete_book", {
+    id: row.id,
+  }).then((res) => {
+    if (res.success) {
       fetchBooks();
+    } else {
+      console.log("删除书籍失败", res.message);
     }
   });
-  ipcRenderer.send("db-del-book", row.id);
 };
 
-const editBook = (row) => {
-  // 编辑书籍时，需要先获取书籍的封面图片
-  const coverPath = ipcRenderer.sendSync("get-cover-path", row.bookId);
-  if (coverPath) {
-    row.cover = `${coverPath}?t=${Date.now()}`;
-  } else {
-    row.cover = "";
+const editBook = async (row) => {
+  const appDataPath = await appDataDir();
+  const coverPath = await join(appDataPath, "covers", `${row.id}.jpg`);
+  // 获取封面路径
+  let coverBase64 = "";
+  try {
+    coverBase64 = await loadImage(coverPath);
+  } catch (error) {
+    console.error("加载封面图片失败:", error);
   }
+  row.cover = coverBase64;
+
   console.log("打开编辑书籍", row);
   setEditBookData(row); // 获取点击后某个书籍的信息
   hideHistoryView(); //隐藏list

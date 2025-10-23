@@ -3,6 +3,8 @@ import { storeToRefs } from "pinia";
 import EventBus from "../common/EventBus";
 import { useAppStore } from "../store/appStore";
 import Tip from "./Tip.vue";
+import EditBook from "./EditBook.vue";
+import NewBook from "./NewBook.vue";
 import HistoryView from "./HistoryView.vue";
 const { tipShow, tipText } = storeToRefs(useAppStore());
 const { showTip, hideTip } = useAppStore();
@@ -19,6 +21,8 @@ EventBus.on("hideTip", (text = "完成!") => {
 <template>
   <div id="popovers">
     <HistoryView> </HistoryView>
+    <EditBook> </EditBook>
+    <NewBook> </NewBook>
     <Tip v-show="tipShow">
       <template #text>
         <p v-html="tipText"></p>

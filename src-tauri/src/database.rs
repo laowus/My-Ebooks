@@ -55,9 +55,10 @@ pub fn close_database(state: State<'_, AppState>) -> Result<DbResponse<()>, Stri
         *db_guard = Connection::open_in_memory().map_err(|e| e.to_string())?;
         return Ok(DbResponse::success(()));
     }
-    Ok(DbResponse::error("Failed to close database connection".to_string()))
+    Ok(DbResponse::error(
+        "Failed to close database connection".to_string(),
+    ))
 }
-
 
 pub fn init_db(app_handle: &AppHandle) -> Result<Connection, rusqlite::Error> {
     // 获取应用数据目录并确保它存在
@@ -368,6 +369,51 @@ pub fn update_chapter(
             // 返回成功响应，包含更新的行数
             Ok(DbResponse::success(1))
         },
+        Err(err) => {
+            // 构建错误响应
+            Ok(DbResponse::error(err.to_string()))
+        }
+    }
+}
+#[command]
+pub fn delete_book(id: i64, state: State<'_, AppState>) -> Result<DbResponse<i64>, String> {
+    let db = get_db_connection(&state)?;
+
+    // 执行删除操作（逻辑删除，将 isDel 设置为 1）
+    match db.execute(
+        "UPDATE ee_book SET isDel = 1, updateTime = datetime('now', 'localtime') WHERE id = ?",
+        params![id],
+    ) {
+        Ok(_) => {
+            // 返回成功响应，包含更新的行数
+            Ok(DbResponse::success(1))
+        }
+        Err(err) => {
+            // 构建错误响应
+            Ok(DbResponse::error(err.to_string()))
+        }
+    }
+}
+
+#[command]
+pub fn update_book(
+    id: i64,
+    title: String,
+    author: String,
+    description: String,
+    state: State<'_, AppState>,
+) -> Result<DbResponse<i64>, String> {
+    let db = get_db_connection(&state)?;
+
+    // 执行更新操作
+    match db.execute(
+        "UPDATE ee_book SET title = ?, author = ?, description = ?, updateTime = datetime('now', 'localtime') WHERE id = ?",
+        params![title, author, description, id],
+    ) {
+        Ok(_) => {
+            // 返回成功响应，包含更新的行数
+            Ok(DbResponse::success(1))
+        }
         Err(err) => {
             // 构建错误响应
             Ok(DbResponse::error(err.to_string()))
