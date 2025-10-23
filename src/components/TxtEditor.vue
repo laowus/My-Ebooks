@@ -53,9 +53,7 @@ watch(
       const rows = Math.ceil(scrollHeight / lineHeight);
       line(rows);
       if (val && val.content.length > 0) {
-        invoke("update_chapter", toRaw(val)).then((res) => {
-          console.log("章节内容已保存:", res);
-        });
+        invoke("update_chapter", toRaw(val)).then((res) => {});
       } else {
         console.log("val 无效，不发送消息");
       }
@@ -353,7 +351,7 @@ watch(
   width: 100%;
   height: 100%;
   resize: none;
-  line-height: 28px;
+  line-height: 30px;
   font-size: 14px;
   float: left;
   padding: 0;

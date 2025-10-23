@@ -155,7 +155,7 @@ onMounted(() => {
             <span class="iconfont icon-Epub" style="color: green"></span>
             <span>导入文件</span>
           </button>
-          <button class="btn-icon" @click="">
+          <button class="btn-icon" @click="showHistoryView">
             <span class="iconfont icon-lishijilu" style="color: green"></span>
             <span>历史记录</span>
           </button>

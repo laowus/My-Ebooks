@@ -46,6 +46,19 @@ pub fn get_db_connection<'a>(
     }
 }
 
+// 添加一个函数来安全关闭数据库连接
+#[command]
+pub fn close_database(state: State<'_, AppState>) -> Result<DbResponse<()>, String> {
+    // 尝试关闭数据库连接
+    if let Ok(mut db_guard) = state.db.lock() {
+        // 断开所有数据库连接
+        *db_guard = Connection::open_in_memory().map_err(|e| e.to_string())?;
+        return Ok(DbResponse::success(()));
+    }
+    Ok(DbResponse::error("Failed to close database connection".to_string()))
+}
+
+
 pub fn init_db(app_handle: &AppHandle) -> Result<Connection, rusqlite::Error> {
     // 获取应用数据目录并确保它存在
     let app_dir = app_handle

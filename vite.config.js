@@ -13,6 +13,21 @@ export default defineConfig(async () => ({
       include: ["buffer"],
     }),
   ],
+  // 配置构建目标以支持现代特性
+  build: {
+    target: ["es2022", "chrome100", "safari15"],
+
+    // 启用 top-level await 支持
+    polyfillModulePreload: true,
+
+    // 配置 rollup 选项
+    rollupOptions: {
+      output: {
+        // 确保正确处理模块
+        format: "es",
+      },
+    },
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
