@@ -1,212 +1,275 @@
 import JSZip from "jszip";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { invoke } from "@tauri-apps/api/core";
+import { exists, readDir, readFile } from "@tauri-apps/plugin-fs";
 import { join, appDataDir } from "@tauri-apps/api/path";
+import EventBus from "./EventBus";
 
-/**
- * 使用 JSZip 创建 EPUB 文件
- * @param {Object} bookInfo - 书籍信息
- * @param {Array} chapters - 章节内容数组
- * @returns {Promise<string>} - 返回生成的 EPUB 文件路径
- */
-export async function createEpub(bookInfo, chapters) {
-  try {
-    const zip = new JSZip();
-
-    // 1. 添加 mimetype 文件（必须是第一个文件且不压缩）
-    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
-
-    // 2. 创建 META-INF 目录并添加 container.xml
-    const metaInf = zip.folder("META-INF");
-    metaInf.file("container.xml", generateContainerXml());
-
-    // 3. 创建 OEBPS 目录
-    const oebps = zip.folder("OEBPS");
-
-    // 4. 添加章节文件并收集信息用于 OPF 和 NCX
-    const manifestItems = [];
-    const spineItems = [];
-    const tocItems = [];
-
-    chapters.forEach((chapter, index) => {
-      const id = `chapter${index + 1}`;
-      const href = `text/chapter${index + 1}.xhtml`;
-
-      // 添加章节 HTML 文件
-      oebps.file(href, generateChapterHtml(chapter.title, chapter.content));
-
-      // 收集清单信息
-      manifestItems.push(
-        `    <item id="${id}" href="${href}" media-type="application/xhtml+xml"/>`
+// 递归生成 navPoints 的函数
+const generateNavPoints = (chapters, parentPlayOrder = 1) => {
+  let currentPlayOrder = parentPlayOrder;
+  return chapters.map((chapter, index) => {
+    const id = `chapter${chapter.href}`;
+    const playOrder = currentPlayOrder++;
+    let navPoint = `<navPoint id="navPoint-${id}" playOrder="${playOrder}">
+                  <navLabel>
+                    <text>${chapter.label}</text>
+                  </navLabel>
+                  <content src="./OEBPS/${id}.html" />`;
+    if (chapter.subitems && chapter.subitems.length > 0) {
+      const subNavPoints = generateNavPoints(
+        chapter.subitems,
+        currentPlayOrder
       );
-      spineItems.push(`    <itemref idref="${id}"/>`);
-      tocItems.push(generateNcxNavPoint(index + 1, chapter.title, href));
-    });
-
-    // 5. 生成并添加 OPF 文件
-    const opfContent = generateOpfFile(bookInfo, manifestItems, spineItems);
-    oebps.file("content.opf", opfContent);
-
-    // 6. 生成并添加 NCX 文件
-    const ncxContent = generateNcxFile(bookInfo, tocItems);
-    oebps.file("toc.ncx", ncxContent);
-
-    // 7. 生成 EPUB 文件
-    const epubBuffer = await zip.generateAsync({ type: "arraybuffer" });
-
-    // 8. 确定保存路径
-    const appDataPath = await appDataDir();
-    const epubDir = await join(appDataPath, "epub");
-
-    // 确保目录存在
-    try {
-      const { exists, mkdir } = await import("@tauri-apps/plugin-fs");
-      if (!(await exists(epubDir))) {
-        await mkdir(epubDir, { recursive: true });
-      }
-    } catch (error) {
-      console.warn("创建目录失败，将直接保存文件:", error);
+      currentPlayOrder += subNavPoints.length;
+      navPoint += subNavPoints.join("\n");
     }
-
-    // 9. 保存 EPUB 文件
-    const outputPath = await join(
-      epubDir,
-      `${sanitizeFilename(bookInfo.title || "未命名")}.epub`
-    );
-    await writeFile(outputPath, new Uint8Array(epubBuffer));
-
-    return outputPath;
-  } catch (error) {
-    console.error("创建 EPUB 文件失败:", error);
-    throw error;
-  }
-}
-
-/**
- * 生成 container.xml 内容
- */
-function generateContainerXml() {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>`;
-}
-
-/**
- * 生成章节 HTML 内容
- */
-function generateChapterHtml(title, content) {
-  return `<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head>
-  <meta charset="UTF-8"/>
-  <title>${escapeXml(title)}</title>
-</head>
-<body>
-  <h1>${escapeXml(title)}</h1>
-  ${content}
-</body>
-</html>`;
-}
-
-/**
- * 生成 OPF 文件内容
- */
-function generateOpfFile(bookInfo, manifestItems, spineItems) {
-  const uuid = generateUuid();
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<package version="2.0" unique-identifier="bookid" xmlns="http://www.idpf.org/2007/opf">
-<metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
-  <dc:title>${escapeXml(bookInfo.title || "未命名")}</dc:title>
-  <dc:creator opf:role="aut">${escapeXml(
-    bookInfo.author || "未知作者"
-  )}</dc:creator>
-  <dc:language>${bookInfo.language || "zh-CN"}</dc:language>
-  <dc:identifier id="bookid">urn:uuid:${uuid}</dc:identifier>
-  ${
-    bookInfo.description
-      ? `<dc:description>${escapeXml(bookInfo.description)}</dc:description>`
-      : ""
-  }
-</metadata>
-<manifest>
-${manifestItems.join("\n")}
-  <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-</manifest>
-<spine toc="ncx">
-${spineItems.join("\n")}
-</spine>
-</package>`;
-}
-
-/**
- * 生成 NCX 文件内容
- */
-function generateNcxFile(bookInfo, navPoints) {
-  const uuid = generateUuid();
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<ncx version="2.0" xmlns="http://www.daisy.org/z3986/2005/ncx/">
-<head>
-  <meta name="dtb:uid" content="urn:uuid:${uuid}"/>
-  <meta name="dtb:depth" content="1"/>
-  <meta name="dtb:totalPageCount" content="0"/>
-  <meta name="dtb:maxPageNumber" content="0"/>
-</head>
-<docTitle>
-  <text>${escapeXml(bookInfo.title || "未命名")}</text>
-</docTitle>
-<docAuthor>
-  <text>${escapeXml(bookInfo.author || "未知作者")}</text>
-</docAuthor>
-<navMap>
-${navPoints.join("\n")}
-</navMap>
-</ncx>`;
-}
-
-/**
- * 生成 NCX 导航点
- */
-function generateNcxNavPoint(playOrder, title, contentSrc) {
-  return `  <navPoint id="chapter${playOrder}" playOrder="${playOrder}">
-    <navLabel><text>${escapeXml(title)}</text></navLabel>
-    <content src="${contentSrc}"/>
-  </navPoint>`;
-}
-
-/**
- * 生成 UUID
- */
-function generateUuid() {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
+    navPoint += `</navPoint>`;
+    return navPoint.trim();
   });
-}
+};
 
-/**
- * 转义 XML 特殊字符
- */
-function escapeXml(text) {
-  if (!text) return "";
-  const map = {
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;",
-  };
-  return text.replace(/[&<>"']/g, function (m) {
-    return map[m];
+// 扁平化章节列表的函数
+const flattenChapters = (chapters) => {
+  return chapters.flatMap((chapter) => [
+    chapter,
+    ...(chapter.subitems ? flattenChapters(chapter.subitems) : []),
+  ]);
+};
+
+// 格式化文本，添加分段和缩进
+const formatText = (text) => {
+  const lines = text.split("\n");
+  let paragraphs = [];
+
+  for (let line of lines) {
+    line = line.trim();
+    if (line !== "") {
+      paragraphs.push(`<p>${line}</p>`);
+    }
+  }
+
+  return paragraphs.join("\n");
+};
+
+export async function createEpub(metadata, chapters) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // 4. 现在才开始生成 EPUB 文件内容
+      const imagesList = [];
+      const { author, title, bookId } = metadata;
+      //内容页的图片保存目录
+      const imagesDir = await join(
+        await appDataDir(),
+        "epub",
+        `${bookId}`,
+        "images"
+      );
+      //封面图片保存目录
+      const coverPath = await join(
+        await appDataDir(),
+        "covers",
+        `${bookId}.jpg`
+      );
+
+      const isCoverExists = await exists(coverPath);
+
+      const zip = new JSZip();
+
+      zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+      zip.folder("META-INF").file(
+        "container.xml",
+        ` <?xml version="1.0" encoding="UTF-8"?>
+            <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">
+                <rootfiles>
+                <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
+                </rootfiles>
+            </container>`.trim()
+      );
+
+      if (isCoverExists) {
+        const coverData = await readFile(coverPath);
+        zip.folder("OEBPS").file("cover.jpg", coverData);
+      }
+
+      if (await exists(imagesDir)) {
+        const imageFiles = await readDir(imagesDir);
+        if (imageFiles && imageFiles.length > 0) {
+          for (const file of imageFiles) {
+            imagesList.push(`OEBPS/images/${file.name}`);
+            const filePath = await join(imagesDir, file.name);
+            const imgData = await readFile(filePath);
+            zip.folder("OEBPS").folder("images").file(file.name, imgData);
+          }
+        }
+      }
+
+      const navPoints = generateNavPoints(chapters).join("\n");
+
+      // 目录页面
+      zip.folder("").file(
+        "toc.ncx",
+        ` <?xml version="1.0" encoding="UTF-8"?>
+            <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+                <head>
+                <meta name="dtb:uid" content="book-id" />
+                <meta name="dtb:depth" content="1" />
+                <meta name="dtb:totalPageCount" content="0" />
+                <meta name="dtb:maxPageNumber" content="0" />
+                </head>
+                <docTitle>
+                <text>${title}</text>
+                </docTitle>
+                <docAuthor>
+                <text>${author}</text>
+                </docAuthor>
+                <navMap>
+                ${navPoints}
+                </navMap>
+            </ncx>`.trim()
+      );
+
+      // 扁平化章节列表
+      const flatChapters = flattenChapters(chapters);
+      // 生成 manifest
+      const manifestItems = flatChapters.map(
+        (chapter, index) => `
+        <item id="chap${chapter.href}" href="OEBPS/chapter${chapter.href}.html" media-type="application/xhtml+xml"/>
+    `
+      );
+
+      if (isCoverExists) {
+        manifestItems.push(`
+          <item id="cover-image" href="OEBPS/cover.jpg" media-type="image/jpeg"/>
+          <item id="cover" href="OEBPS/cover.html" media-type="application/xhtml+xml"/>
+        `);
+      }
+      // 添加图片到 manifest
+      if (imagesList.length > 0) {
+        imagesList.forEach((image, index) => {
+          manifestItems.push(`
+          <item id="img${index}" href="${image}" media-type="image/jpeg"/>
+        `);
+        });
+      }
+
+      const manifest = manifestItems.join("").trim();
+      // 生成 spine
+      const spineItems = flatChapters.map(
+        (chapter, index) => `
+        <itemref idref="chap${chapter.href}"/>`
+      );
+
+      if (isCoverExists) {
+        spineItems.unshift(`<itemref idref="cover" linear="yes"/>`);
+      }
+      const spine = spineItems.join("").trim();
+
+      // 生成封面页面
+      if (isCoverExists) {
+        const coverFileName = "cover.jpg";
+        zip.folder("OEBPS").file(
+          "cover.html",
+          `<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+          <html xmlns="http://www.w3.org/1999/xhtml" lang="zh">
+            <head>
+              <title>封面</title>
+            </head>
+            <body>
+              <img src="${coverFileName}" alt="封面" />
+            </body>
+          </html>
+          `.trim()
+        );
+      }
+
+      // 生成内容页面
+      const addChapterFiles = async () => {
+        for (const [index, chapter] of flatChapters.entries()) {
+          EventBus.emit(
+            "showTip",
+            chapter.label +
+              " 正在添加到 EPUB 文件... (" +
+              (index + 1) +
+              "/" +
+              flatChapters.length +
+              ")"
+          );
+          const result = await invoke("get_chapter", {
+            id: String(chapter.href),
+          });
+          // 检查返回结果是否成功
+          const content = result.success
+            ? formatText(result.data[0].content)
+            : "";
+
+          zip.folder("OEBPS").file(
+            `chapter${chapter.href}.html`,
+            `<?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+                <html xmlns="http://www.w3.org/1999/xhtml" lang="zh">
+                  <head>
+                    <title>${chapter.label}</title>
+                    <link rel="stylesheet" type="text/css" href="../style.css"/>
+                  </head>
+                  <body>
+                  ${content}
+                  </body>
+                </html>
+              `.trim()
+          );
+        }
+      };
+
+      // 等待所有章节文件添加完成
+      addChapterFiles()
+        .then(() => {
+          const tocManifest = `<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`;
+          // 生成 content.opf
+          zip.folder("").file(
+            "content.opf",
+            `<?xml version="1.0" encoding="UTF-8"?>
+            <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="book-id" version="2.0">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                <dc:title>${title}</dc:title>
+                <dc:language>zh</dc:language>
+                <dc:creator>${author}</dc:creator>
+                <dc:identifier id="book-id">${new Date().getTime()}</dc:identifier>
+                ${
+                  isCoverExists
+                    ? '<meta name="cover" content="cover-image"/>'
+                    : ""
+                }
+              </metadata>
+              <manifest>
+                ${manifest}
+                ${tocManifest}
+              </manifest>
+              <spine toc="ncx">
+                ${spine}
+              </spine>
+            </package>
+          `.trim()
+          );
+
+          zip
+            .generateAsync({ type: "nodebuffer" })
+            .then((epubContent) => {
+              EventBus.emit("hideTip", "EPUB 文件创建成功！");
+              resolve(epubContent);
+            })
+            .catch((err) => {
+              console.error("转换过程中出现错误:", err);
+              reject(err);
+            });
+        })
+        .catch((err) => {
+          console.error("添加章节文件时出现错误:", err);
+          reject(err);
+        });
+    } catch (error) {
+      console.error("创建 EPUB 文件失败:", error);
+      throw error;
+    }
   });
-}
-
-/**
- * 清理文件名
- */
-function sanitizeFilename(filename) {
-  // 移除或替换文件名中的非法字符
-  return filename.replace(/[<>:"/\|?*]/g, "_").trim() || "未命名";
 }

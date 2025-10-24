@@ -250,20 +250,19 @@ pub fn add_chapter(
 
 #[command]
 pub fn get_chapter(
-    book_id: i64,
     id: String,
     state: State<'_, AppState>,
 ) -> Result<DbResponse<Vec<Chapter>>, String> {
     let db = get_db_connection(&state)?;
 
     // 执行查询操作
-    let mut stmt = match db.prepare("SELECT * FROM ee_chapter WHERE bookId = ? AND id = ?") {
+    let mut stmt = match db.prepare("SELECT * FROM ee_chapter WHERE id = ?") {
         Ok(statement) => statement,
         Err(err) => return Err(err.to_string()),
     };
 
     // 执行查询并映射结果到Chapter结构体向量
-    let chapters = match stmt.query_map(params![book_id, id], |row| {
+    let chapters = match stmt.query_map(params![id], |row| {
         Ok(Chapter {
             id: row.get(0)?,
             book_id: row.get(1)?,
@@ -311,23 +310,22 @@ pub fn update_toc(
     }
 }
 
-
 #[command]
 pub fn get_chapter_where(
-    where_str: String,  // 已修改为 String 类型
+    where_str: String, // 已修改为 String 类型
     state: State<'_, AppState>,
 ) -> Result<DbResponse<Vec<Chapter>>, String> {
     let db = get_db_connection(&state)?;
-    
+
     // 构建 SQL 查询语句
     let sql = format!("SELECT * FROM ee_chapter WHERE {}", where_str);
-    
+
     // 打印 SQL 语句到终端
     println!("[SQL] 执行查询: {}", sql);
-    
+
     // 如果需要更详细的日志，也可以打印传入的 where 条件
     println!("[SQL] WHERE 条件: {}", where_str);
-    
+
     // 执行查询操作
     let mut stmt = match db.prepare(&sql) {
         Ok(statement) => statement,
@@ -335,9 +333,9 @@ pub fn get_chapter_where(
             // 打印错误信息
             println!("[SQL ERROR] 准备语句失败: {}", err);
             return Err(err.to_string());
-        },
+        }
     };
-    
+
     // 执行查询并映射结果到Chapter结构体
     let chapters = match stmt.query_map([], |row| {
         Ok(Chapter {
@@ -357,23 +355,22 @@ pub fn get_chapter_where(
                     Err(err) => {
                         println!("[SQL ERROR] 映射结果失败: {}", err);
                         return Err(err.to_string());
-                    },
+                    }
                 }
             }
             // 打印查询结果数量
             println!("[SQL] 查询完成，返回 {} 条记录", results.len());
             results
-        },
+        }
         Err(err) => {
             println!("[SQL ERROR] 执行查询失败: {}", err);
             return Err(err.to_string());
-        },
+        }
     };
-    
+
     // 返回成功响应，包含章节列表
     Ok(DbResponse::success(chapters))
-}       
-
+}
 
 #[command]
 pub fn update_chapter(

@@ -47,9 +47,8 @@ const importBook = (index, row) => {
   const toc = JSON.parse(row.toc);
   setToc(toc);
   setFirst(false);
-  console.log("importBook", metaData, toc);
+  // 添加调试信息，查看转换前后的值
   invoke("get_chapter", {
-    bookId: metaData.bookId,
     id: String(toc[0].href),
   }).then((res) => {
     if (res.success) {

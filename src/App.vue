@@ -44,7 +44,6 @@ const updateTocView = (curhref) => {
 
 const updateCurChapter = (href) => {
   invoke("get_chapter", {
-    bookId: metaData.value.bookId,
     id: String(href),
   }).then((res) => {
     if (res.success) {

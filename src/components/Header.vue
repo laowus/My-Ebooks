@@ -1,5 +1,8 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { basename, join, appDataDir } from "@tauri-apps/api/path";
+import { writeFile, exists } from "@tauri-apps/plugin-fs";
 import { ref, onMounted, inject, toRaw } from "vue";
 import { storeToRefs } from "pinia";
 import WindowCtr from "./WindowCtr.vue";
@@ -11,11 +14,12 @@ import { createEpub } from "../common/createFile.js";
 import { readTxtFile, getTextFromHTML } from "../common/utils";
 import { useBookStore } from "../store/bookStore";
 import { useAppStore } from "../store/appStore";
-import { basename } from "@tauri-apps/api/path";
+
 const { curChapter, metaData, isFirst, toc, isAllEdit, isTitleIn } =
   storeToRefs(useBookStore());
 const { setMetaData, setFirst, setIsAllEdit, setTitleIn } = useBookStore();
-const { showHistoryView, showNewBook, showAbout } = useAppStore();
+const { showHistoryView, showNewBook, showAbout, setSavePath } = useAppStore();
+const { savePath } = storeToRefs(useAppStore());
 
 const curIndex = ref(1);
 const indentNum = ref(2);
@@ -380,45 +384,69 @@ const insertChapters = async (chapters, id) => {
   EventBus.emit("hideTip");
 };
 
-async function exportBookToEpub() {
+/**
+ * 清理文件名
+ */
+function sanitizeFilename(filename) {
+  // 移除或替换文件名中的非法字符
+  return filename.replace(/[<>:"/\|?*]/g, "_").trim() || "未命名";
+}
+
+const exportBookToEpub = async () => {
   try {
-    // 从数据库获取书籍信息和章节
-    // 这里仅作为示例，您需要根据实际情况获取数据
-    const bookInfo = {
-      title: "示例电子书",
-      author: "作者名称",
-      description: "这是一本使用 Tauri 和 JSZip 生成的 EPUB 电子书",
-    };
+    // 1. 弹出保存对话框，获取用户选择的保存路径
+    const defaultFileName = `${sanitizeFilename(
+      metaData.value.title || "未命名"
+    )}.epub`;
+    // 判断是否存在默认文件名，如果存在，则使用默认文件名，否则使用默认文件名
+    if (savePath.value) {
+      //判断目录是否存在
+      if (!(await exists(savePath.value))) {
+        console.log("保存路径不存在");
+        setSavePath(await appDataDir());
+      }
+    }
+    const defaultPath = await join(svPath, defaultFileName);
+    const selectedPath = await save({
+      title: "保存 EPUB 文件",
+      defaultPath: defaultPath,
+      filters: [
+        {
+          name: "EPUB 文件",
+          extensions: ["epub"],
+        },
+        {
+          name: "所有文件",
+          extensions: ["*"],
+        },
+      ],
+    });
 
-    // 示例章节数据
-    const chapters = [
-      {
-        title: "第一章",
-        content:
-          "<p>这是第一章的内容。</p><p>可以包含多个段落和 HTML 标记。</p>",
-      },
-      {
-        title: "第二章",
-        content:
-          "<p>这是第二章的内容。</p><blockquote>支持引用、列表等格式</blockquote><ul><li>项目1</li><li>项目2</li></ul>",
-      },
-      {
-        title: "第三章",
-        content: "<p>这是第三章的内容。</p><h2>小节标题</h2><p>更多内容...</p>",
-      },
-    ];
-
-    ElMessage.info("正在生成 EPUB 文件...");
-
-    // 创建 EPUB 文件
-    const epubPath = await createEpub(bookInfo, chapters);
-
-    ElMessage.success(`EPUB 文件已生成: ${basename(epubPath)}`);
+    // 2. 检查用户是否取消了保存
+    if (!selectedPath) {
+      console.log("用户取消了保存");
+      return null;
+    } else {
+      // 创建 EPUB 文件
+      createEpub(toRaw(metaData.value), toRaw(toc.value)).then(
+        async (epubContent) => {
+          // 3. 写入文件
+          writeFile(selectedPath, epubContent)
+            .then(() => {
+              ElMessage.success(`EPUB 文件已生成: ${selectedPath}`);
+            })
+            .catch((err) => {
+              console.error("写入 EPUB 文件失败:", err);
+              ElMessage.error("生成 EPUB 文件失败");
+            });
+        }
+      );
+    }
   } catch (error) {
     console.error("导出 EPUB 失败:", error);
     ElMessage.error("生成 EPUB 文件失败");
   }
-}
+};
 </script>
 <template>
   <div class="header">
