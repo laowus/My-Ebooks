@@ -91,7 +91,7 @@ const handleEpubAndInsertChapter = async (file, bookId, book) => {
   EventBus.emit("hideTip");
 };
 
-export const open = async (file) => {
+export const openFile = async (file) => {
   const { setToc, setMetaData, setFirst } = useBookStore();
   const { metaData, isFirst, toc } = storeToRefs(useBookStore());
 

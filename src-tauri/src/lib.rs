@@ -14,7 +14,7 @@ pub fn run() {
             database::add_chapter,
             database::get_chapter,
             database::update_toc,
-            database::get_first_chapter,
+            database::get_chapter_where,
             database::update_chapter,
             database::delete_book,
             database::update_book,

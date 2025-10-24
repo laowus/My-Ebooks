@@ -5,10 +5,13 @@ import { storeToRefs } from "pinia";
 import WindowCtr from "./WindowCtr.vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import EventBus from "../common/EventBus";
-import { open } from "../libs/parseBook.js";
+import { openFile } from "../libs/parseBook.js";
+import { getChapters } from "../common/funs.js";
+import { createEpub } from "../common/createFile.js";
 import { readTxtFile, getTextFromHTML } from "../common/utils";
 import { useBookStore } from "../store/bookStore";
 import { useAppStore } from "../store/appStore";
+import { basename } from "@tauri-apps/api/path";
 const { curChapter, metaData, isFirst, toc, isAllEdit, isTitleIn } =
   storeToRefs(useBookStore());
 const { setMetaData, setFirst, setIsAllEdit, setTitleIn } = useBookStore();
@@ -71,7 +74,7 @@ const initDom = () => {
           }
         });
       } else if (ext === "epub" || ext === "mobi") {
-        open(newFile).then((res) => {
+        openFile(newFile).then((res) => {
           console.log(" 02 open", res);
         });
       }
@@ -104,6 +107,318 @@ const restart = () => {
       });
     });
 };
+
+const updateChapter = async (chapter) => {
+  // 按换行符分割字符串
+  await invoke("update_chapter", chapter).then((res) => {
+    if (res.success) {
+      return;
+    } else {
+      throw new Error("数据库更新章节失败");
+    }
+  });
+};
+const iCTip = (text) => {
+  EventBus.emit("showTip", text);
+};
+
+// 缩进
+const indentFirstLine = async () => {
+  if (curChapter.value.content) {
+    const indentString = "    ".repeat(indentNum.value);
+    console.log("空格", indentString, "空格");
+    // 按换行符分割字符串
+    const lines = curChapter.value.content
+      .split("\n")
+      .map((line) => line.trimStart());
+    // 给每一行添加缩进
+    const indentedLines = lines.map((line) => indentString + line);
+    // 重新拼接字符串
+    curChapter.value.content = indentedLines.join("\n");
+  }
+  //书籍全部章节内容去空行
+  if (isAllEdit.value) {
+    const res = await invoke("get_chapter_where", {
+      whereStr: `bookId = ${metaData.value.bookId}`,
+    });
+    if (res.success) {
+      for (const [index, chapter] of res.data.entries()) {
+        const indentString = "    ".repeat(indentNum.value);
+        // 按换行符分割字符串
+        const lines = chapter.content
+          .split("\n")
+          .map((line) => line.trimStart());
+        // 给每一行添加缩进
+        const indentedLines = lines.map((line) => indentString + line);
+        chapter.content = indentedLines.join("\n");
+        iCTip(
+          "处理 " +
+            chapter.label +
+            "  (" +
+            (index + 1) +
+            "/" +
+            res.data.length +
+            ")"
+        );
+        await updateChapter(chapter);
+      }
+      EventBus.emit("hideTip");
+    }
+  }
+};
+//删除空行
+const deleteEmptyLines = async () => {
+  if (curChapter.value.content) {
+    // 按换行符分割字符串
+    const lines = curChapter.value.content.split("\n");
+    // 过滤掉空行
+    const nonEmptyLines = lines.filter((line) => line.trim() !== "");
+    // 重新拼接字符串
+    curChapter.value.content = nonEmptyLines.join("\n");
+  } //书籍全部章节内容去空行
+  if (isAllEdit.value) {
+    const res = await invoke("get_chapter_where", {
+      whereStr: `bookId = ${metaData.value.bookId}`,
+    });
+    if (res.success) {
+      for (const [index, chapter] of res.data.entries()) {
+        const lines = chapter.content.split("\n");
+        const nonEmptyLines = lines.filter((line) => line.trim() !== "");
+        chapter.content = nonEmptyLines.join("\n");
+        iCTip(
+          "处理 " +
+            chapter.label +
+            "  (" +
+            (index + 1) +
+            "/" +
+            res.data.length +
+            ")"
+        );
+        await updateChapter(chapter);
+      }
+      EventBus.emit("hideTip");
+    }
+  }
+};
+
+//删除章名
+const deleteTitle = async () => {
+  //
+  if (curChapter.value.content) {
+    // 按换行符分割字符串
+    const lines = curChapter.value.content.split("\n");
+    // 过滤掉空行
+    const tempTitle = lines[0].trim();
+    if (tempTitle) {
+      console.log("删除章名", tempTitle);
+      if (tempTitle.includes(curChapter.value.label)) {
+        // 删除第一行
+        lines.shift();
+        // 重新拼接字符串
+        curChapter.value.content = lines.join("\n");
+      }
+    }
+  }
+  //批量删除全部章名
+  if (isAllEdit.value) {
+    const res = await invoke("get_chapter_where", {
+      whereStr: `bookId = ${metaData.value.bookId}`,
+    });
+    if (res.success) {
+      for (const [index, chapter] of res.data.entries()) {
+        const lines = chapter.content.split("\n");
+        const tempTitle = lines[0].trim();
+        if (tempTitle) {
+          if (tempTitle.includes(chapter.label)) {
+            console.log("删除章名", tempTitle);
+            lines.shift();
+            chapter.content = lines.join("\n");
+          }
+        }
+        iCTip(
+          "处理 " +
+            chapter.label +
+            "  (" +
+            (index + 1) +
+            "/" +
+            res.data.length +
+            ")"
+        );
+        await updateChapter(chapter);
+      }
+      EventBus.emit("hideTip");
+    }
+  }
+};
+
+//添加章名
+const addTitle = async () => {
+  if (curChapter.value.content) {
+    //判断第一行是否有章名
+    const tempTitle = curChapter.value.content.split("\n")[0].trim();
+    if (!tempTitle.includes(curChapter.value.label)) {
+      // 按换行符分割字符串
+      const lines = curChapter.value.content.split("\n");
+      // 给第一行添加章名
+      lines.unshift(curChapter.value.label);
+      // 重新拼接字符串
+      curChapter.value.content = lines.join("\n");
+    }
+  }
+  //书籍全部章节内容去空行
+  if (isAllEdit.value) {
+    const res = await invoke("get_chapter_where", {
+      whereStr: `bookId = ${metaData.value.bookId}`,
+    });
+    if (res.success) {
+      for (const [index, chapter] of res.data.entries()) {
+        //判断第一行是否有章名
+        const tempTitle = chapter.content.split("\n")[0].trim();
+        if (!tempTitle.includes(chapter.label)) {
+          // 按换行符分割字符串
+          const lines = chapter.content.split("\n");
+          // 给第一行添加章名
+          lines.unshift("<h3>" + chapter.label + "</h3>");
+          // 重新拼接字符串
+          chapter.content = lines.join("\n");
+        }
+        iCTip(
+          "处理 " +
+            chapter.label +
+            "  (" +
+            (index + 1) +
+            "/" +
+            res.data.length +
+            ")"
+        );
+        await updateChapter(chapter);
+      }
+      EventBus.emit("hideTip");
+    }
+  }
+};
+
+const regString = () => {
+  const pre = $("#pre").value;
+  const aft = $("#aft").value;
+  const strNum = $("#strNum").value;
+  let attach = $("#attach").value.trim();
+  // 当 attach 不为空时才拼接正则部分
+  const attachPart = attach ? `|^\\s*(${attach})` : "";
+  // 动态构建章节匹配部分，处理pre和aft为空的情况
+  // 动态构建章节匹配部分，处理pre和aft为空的情况
+  let chapterMatchPart = "";
+  if (pre && aft) {
+    // 如果pre和aft都不为空
+    chapterMatchPart = `([${pre}][一二三四五六七八九十百千万零0-9]+[${aft}])`;
+  } else if (pre) {
+    // 如果只有pre不为空
+    chapterMatchPart = `([${pre}][一二三四五六七八九十百千万零0-9]+)`;
+  } else if (aft) {
+    // 如果只有aft不为空
+    chapterMatchPart = `([一二三四五六七八九十百千万零0-9]+[${aft}])`;
+  } else {
+    // 如果pre和aft都为空
+    chapterMatchPart = `([一二三四五六七八九十百千万零0-9]+)`;
+  }
+
+  // 动态拼接完整的正则表达式
+  const regexPattern = `^\\s*(${chapterMatchPart}${attachPart})(.{0,${strNum}}[^\\n]?)?$`;
+  const chapterRegex = new RegExp(regexPattern, "gm");
+  console.log(chapterRegex);
+
+  // 分割字符串
+  const tempChapter = {
+    bookId: curChapter.value.bookId,
+    href: curChapter.value.href,
+    content: curChapter.value.label,
+    label: curChapter.value.label,
+  };
+  const chapters = getChapters(
+    curChapter.value.content,
+    curChapter.value.label,
+    chapterRegex,
+    isTitleIn.value
+  );
+  console.log("章节", chapters);
+  if (!Array.isArray(chapters) || chapters.length === 0) {
+    ElMessage.error("未匹配到章节，请检查正则表达式");
+    return;
+  }
+  insertChapters(chapters, curChapter.value.id).then(() => {
+    ipcRenderer.send("db-update-chapter", tempChapter);
+  });
+};
+
+const insertChapters = async (chapters, id) => {
+  const insertSingleChapter = (chapterData) => {
+    return new Promise((resolve, reject) => {
+      const successListener = (res) => {
+        resolve(res);
+      };
+      EventBus.on("addChapterRes", successListener);
+      EventBus.emit("addChapter", {
+        href: id,
+        chapter: chapterData,
+      });
+    });
+  };
+
+  for (const [index, chap] of chapters.entries()) {
+    const chapter = {
+      bookId: metaData.value.bookId,
+      label: chap.label,
+      href: `OPS/chapter-${Date.now()}`,
+      content: chap.content,
+    };
+    iCTip(
+      "导入 " + chap.label + "  (" + (index + 1) + "/" + chapters.length + ")"
+    );
+    //await 等待章节插入完成
+    await insertSingleChapter(chapter);
+  }
+  EventBus.emit("hideTip");
+};
+
+async function exportBookToEpub() {
+  try {
+    // 从数据库获取书籍信息和章节
+    // 这里仅作为示例，您需要根据实际情况获取数据
+    const bookInfo = {
+      title: "示例电子书",
+      author: "作者名称",
+      description: "这是一本使用 Tauri 和 JSZip 生成的 EPUB 电子书",
+    };
+
+    // 示例章节数据
+    const chapters = [
+      {
+        title: "第一章",
+        content:
+          "<p>这是第一章的内容。</p><p>可以包含多个段落和 HTML 标记。</p>",
+      },
+      {
+        title: "第二章",
+        content:
+          "<p>这是第二章的内容。</p><blockquote>支持引用、列表等格式</blockquote><ul><li>项目1</li><li>项目2</li></ul>",
+      },
+      {
+        title: "第三章",
+        content: "<p>这是第三章的内容。</p><h2>小节标题</h2><p>更多内容...</p>",
+      },
+    ];
+
+    ElMessage.info("正在生成 EPUB 文件...");
+
+    // 创建 EPUB 文件
+    const epubPath = await createEpub(bookInfo, chapters);
+
+    ElMessage.success(`EPUB 文件已生成: ${basename(epubPath)}`);
+  } catch (error) {
+    console.error("导出 EPUB 失败:", error);
+    ElMessage.error("生成 EPUB 文件失败");
+  }
+}
 </script>
 <template>
   <div class="header">
@@ -183,7 +498,11 @@ const restart = () => {
           </button>
         </div>
         <div v-show="curIndex === 2">
-          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+          <button
+            class="btn-icon"
+            @click="deleteEmptyLines"
+            :disabled="!curChapter.bookId"
+          >
             <span
               class="iconfont icon-shanchukonghang"
               style="color: red"
@@ -198,7 +517,11 @@ const restart = () => {
               {{ index }}
             </option>
           </select>
-          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+          <button
+            class="btn-icon"
+            @click="indentFirstLine"
+            :disabled="!curChapter.bookId"
+          >
             <span
               class="iconfont icon-shouhangsuojin"
               style="color: green"
@@ -206,7 +529,11 @@ const restart = () => {
             <span>首行缩进</span>
           </button>
 
-          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+          <button
+            class="btn-icon"
+            @click="deleteTitle"
+            :disabled="!curChapter.bookId"
+          >
             <span
               class="iconfont icon-shanchukonghang"
               style="color: red"
@@ -214,11 +541,15 @@ const restart = () => {
             <span>删除章名</span>
           </button>
 
-          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+          <button
+            class="btn-icon"
+            @click="addTitle"
+            :disabled="!curChapter.bookId"
+          >
             <span class="iconfont icon-xinjian"></span>
             <span>添加章名</span>
           </button>
-          <button class="btn-icon" @click="">
+          <button class="btn-icon" @click="setIsAllEdit">
             <span
               class="iconfont"
               :class="isAllEdit ? 'icon-gouxuananniu' : 'icon-gouxuananniu1'"
@@ -260,7 +591,7 @@ const restart = () => {
               placeholder="多个用|分开"
             />
 
-            <button class="btn-icon" @click="">
+            <button class="btn-icon" @click="setTitleIn">
               <span
                 class="iconfont"
                 :class="isTitleIn ? 'icon-gouxuananniu' : 'icon-gouxuananniu1'"
@@ -268,14 +599,18 @@ const restart = () => {
               ></span>
               <span style="padding-top: 8px">保留章名</span>
             </button>
-            <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+            <button
+              class="btn-icon"
+              @click="regString"
+              :disabled="!curChapter.bookId"
+            >
               <span class="iconfont icon-jianqie" style="color: green"></span>
               <span>开始分割</span>
             </button>
           </div>
         </div>
         <div v-show="curIndex === 4">
-          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+          <button class="btn-icon" @click="exportBookToEpub">
             <span class="iconfont icon-daochuexl" style="color: green"></span>
             <span>生成epub</span>
           </button>
