@@ -1,10 +1,10 @@
 use base64::engine::general_purpose;
 use base64::engine::Engine as _;
-use std::fs;
 use std::env;
+use std::fs;
 use std::thread;
-use tauri::{command, AppHandle, Manager};
 use std::time::Duration;
+use tauri::{command, AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
 
 #[command]
@@ -19,7 +19,10 @@ pub fn read_image(path: String) -> Result<String, String> {
 //删除应用数据目录所有文件
 #[command]
 pub fn clear_app_data(app_handle: AppHandle) -> Result<(), String> {
-    let app_dir = app_handle.path().app_data_dir().expect("Failed to get app data directory");
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .expect("Failed to get app data directory");
     fs::remove_dir_all(app_dir).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -31,7 +34,7 @@ pub async fn restart_app(app_handle: AppHandle) -> Result<(), String> {
         Ok(path) => path,
         Err(err) => return Err(format!("获取可执行文件路径失败: {}", err)),
     };
-    
+
     // 使用ShellExt提供的公开API来启动新进程
     match app_handle.shell().command(exe_path).spawn() {
         Ok(_) => {
@@ -41,7 +44,26 @@ pub async fn restart_app(app_handle: AppHandle) -> Result<(), String> {
                 app_handle.exit(0);
             });
             Ok(())
-        },
-        Err(err) => Err(format!("启动新应用实例失败: {}", err))
+        }
+        Err(err) => Err(format!("启动新应用实例失败: {}", err)),
     }
+}
+
+#[command]
+pub async fn open_folder(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let command = "open";
+
+    #[cfg(target_os = "windows")]
+    let command = "explorer";
+
+    #[cfg(target_os = "linux")]
+    let command = "xdg-open";
+
+    std::process::Command::new(command)
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }

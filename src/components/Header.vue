@@ -10,7 +10,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import EventBus from "../common/EventBus";
 import { openFile } from "../libs/parseBook.js";
 import { getChapters } from "../common/funs.js";
-import { createEpub, createTxt } from "../common/createFile.js";
+import { createEpub, createTxt, createHtml } from "../common/createFile.js";
 import { readTxtFile, getTextFromHTML } from "../common/utils";
 import { useBookStore } from "../store/bookStore";
 import { useAppStore } from "../store/appStore";
@@ -330,13 +330,13 @@ const regString = () => {
   const chapterRegex = new RegExp(regexPattern, "gm");
   console.log(chapterRegex);
 
-  // 分割字符串
+  //  保存当前章节的id和内容，用于更新当前章节 更新完后, 内容只留标题
   const tempChapter = {
-    bookId: curChapter.value.bookId,
-    href: curChapter.value.href,
+    id: curChapter.value.id,
     content: curChapter.value.label,
     label: curChapter.value.label,
   };
+  // 分割字符串
   const chapters = getChapters(
     curChapter.value.content,
     curChapter.value.label,
@@ -349,7 +349,13 @@ const regString = () => {
     return;
   }
   insertChapters(chapters, curChapter.value.id).then(() => {
-    ipcRenderer.send("db-update-chapter", tempChapter);
+    invoke("update_chapter", tempChapter).then((res) => {
+      if (res.success) {
+        console.log("更新当前章节成功");
+      } else {
+        ElMessage.error("更新当前章节失败");
+      }
+    });
   });
 };
 
@@ -437,6 +443,62 @@ const exportBookToEpub = async () => {
   } catch (error) {
     console.error("打开选择文件对话框失败:", error);
   }
+};
+
+const txtToHtmlString = (txt, title) => {
+  // 去除多余的空行
+  const cleanTxt = txt.replace(/\n{3,}/g, "\n\n");
+
+  // 将文本按换行符分割成行
+  const lines = cleanTxt.split("\n");
+
+  // 处理每一行：
+  // 1. 跳过空行
+  // 2. 转义空格
+  // 3. 用 <p> 标签包裹每一行
+  const htmlLines = lines
+    .map((line) => {
+      // 跳过空行
+      if (!line.trim()) return "";
+
+      // 转义空格：将连续空格替换为 &nbsp;
+      const escapedLine = line.replace(/ {2,}/g, (match) => {
+        return "&nbsp;".repeat(match.length);
+      });
+
+      // 用 <p> 标签包裹每一行
+      return `<p>${escapedLine}</p>`;
+    })
+    .filter((line) => line !== ""); // 过滤掉空字符串
+
+  // 合并所有带标签的行
+  const bodyContent = htmlLines.join("");
+
+  // 包裹完整的 HTML 结构
+  return `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      margin: 20px;
+      color: #333;
+    }
+    p {
+      margin: 8px 0;
+      text-align: justify;
+    }
+  </style>
+</head>
+<body>
+  ${bodyContent}
+</body>
+</html>`;
 };
 
 const exportBookToHtml = async () => {
@@ -737,7 +799,7 @@ const exportBookToTxt = async () => {
           </button>
         </div>
         <div v-show="curIndex === 5">
-          <button class="btn-icon" @click="">
+          <button class="btn-icon" @click="showAbout">
             <span class="iconfont icon-daochuexl" style="color: green"></span>
             <span>关于</span>
           </button>

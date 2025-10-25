@@ -7,6 +7,7 @@
     "core:default",
     "shell:allow-open",
     "shell:allow-spawn",
+    "os:default",
     "fs:default",
     "fs:scope-appdata-recursive",
     "fs:allow-appdata-read",

@@ -8,6 +8,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_os::init())
         .invoke_handler(tauri::generate_handler![
             database::close_database,
             database::add_book,
@@ -21,7 +22,8 @@ pub fn run() {
             database::update_book,
             fileutil::read_image,
             fileutil::clear_app_data,
-            fileutil::restart_app
+            fileutil::restart_app,
+            fileutil::open_folder,
         ])
         .setup(setup::setup_app)
         .run(tauri::generate_context!())

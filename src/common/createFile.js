@@ -274,7 +274,7 @@ export const createEpub = async (metadata, chapters) => {
   });
 };
 
-const generateTxt = async (chapters) => {
+const generateTxt = async (chapters, isHtml = false) => {
   let localTxtContent = "";
   // 添加 HTML 标签去除函数
   const removeHtmlTags = (htmlString) => {
@@ -288,20 +288,20 @@ const generateTxt = async (chapters) => {
     });
     EventBus.emit("showtip", chapter.label);
     const content = result.success
-      ? chapter.label + "\n" + removeHtmlTags(result.data[0].content)
+      ? (isHtml ? "<h2>" + chapter.label + "</h2>\n" : chapter.label + "\n") +
+        removeHtmlTags(result.data[0].content)
       : "";
     localTxtContent += content;
 
     if (chapter.subitems) {
       // 递归调用并等待结果
-      const subContent = await generateTxt(chapter.subitems);
+      const subContent = await generateTxt(chapter.subitems, isHtml);
       localTxtContent += subContent;
     }
   }
   EventBus.emit("hidetip");
   return localTxtContent;
 };
-
 
 export const createTxt = async (chapters) => {
   console.log("createTxt", chapters);
@@ -321,64 +321,20 @@ export const createTxt = async (chapters) => {
   }
 };
 
-const txtToHtmlString = (txt, title) => {
-  // 去除多余的空行
-  const cleanTxt = txt.replace(/\n{3,}/g, "\n\n");
-
-  // 将文本按换行符分割成行
-  const lines = cleanTxt.split("\n");
-
-  // 处理每一行：
-  // 1. 跳过空行
-  // 2. 转义空格
-  // 3. 用 <p> 标签包裹每一行
-  const htmlLines = lines
-    .map((line) => {
-      // 跳过空行
-      if (!line.trim()) return "";
-
-      // 转义空格：将连续空格替换为 &nbsp;
-      const escapedLine = line.replace(/ {2,}/g, (match) => {
-        return "&nbsp;".repeat(match.length);
-      });
-
-      // 用 <p> 标签包裹每一行
-      return `<p>${escapedLine}</p>`;
-    })
-    .filter((line) => line !== ""); // 过滤掉空字符串
-
-  // 合并所有带标签的行
-  const bodyContent = htmlLines.join("");
-
-  // 包裹完整的 HTML 结构
-  return `
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
-      margin: 20px;
-      color: #333;
-    }
-    p {
-      margin: 8px 0;
-      text-align: justify;
-    }
-  </style>
-</head>
-<body>
-  ${bodyContent}
-</body>
-</html>`;
-};
-
-
 export const createHtml = async (chapters, title) => {
-  console.log("createHtml", chapters);
+  console.log("createTxt", chapters);
+  // 检查 chapters 是否为空
+  if (!chapters || chapters.length === 0) {
+    console.log("chapters 数组为空");
+    return "";
+  }
 
-}
+  try {
+    // 等待 generateTxt 执行完成
+    const txtContent = await generateTxt(chapters, true);
+    return txtContent;
+  } catch (err) {
+    console.error("转换过程中出现错误:", err);
+    throw err;
+  }
+};

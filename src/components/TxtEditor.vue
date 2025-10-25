@@ -1,9 +1,10 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
-import { ref, reactive, watch, onMounted, toRaw, computed } from "vue";
+import { ref, watch, onMounted, toRaw } from "vue";
 import { storeToRefs } from "pinia";
 import { useBookStore } from "../store/bookStore";
 import { join, appDataDir } from "@tauri-apps/api/path";
+import { exists } from "@tauri-apps/plugin-fs";
 import { loadImage } from "../common/utils";
 
 const { curChapter, selectColor } = storeToRefs(useBookStore());
@@ -86,30 +87,42 @@ onMounted(async () => {
 
 const formattedContent = ref("");
 
+const getFormattedContent = async (content) => {
+  if (!content) {
+    formattedContent.value = "";
+    return;
+  }
+  imageDir = await join(epubDir, `${curChapter.value?.bookId}`, "images");
+  const dirExists = await exists(imageDir);
+  if (dirExists) {
+    const files = await readdir(imageDir);
+    if (files.length > 0) {
+      const lines = content.split("\n").filter((line) => line.trim() !== "");
+      const processedLines = await Promise.all(
+        lines.map(async (line) => {
+          if (line.includes("src=")) {
+            const imagePath = line.match(/src="([^"]+)"/)[1];
+            const absoluteImagePath = await join(
+              imageDir,
+              imagePath.replace("images/", "")
+            );
+            const base64Image = await loadImage(absoluteImagePath);
+            line = line.replace(/src="[^"]+"/, `src="${base64Image}"`);
+          }
+          return `<p>${line}</p>`;
+        })
+      );
+      formattedContent.value = processedLines.join("");
+    }
+  } else {
+    formattedContent.value = content;
+  }
+};
+
 watch(
   () => curChapter.value?.content,
-  async (content) => {
-    if (!content) {
-      formattedContent.value = "";
-      return;
-    }
-    const lines = content.split("\n").filter((line) => line.trim() !== "");
-    const processedLines = await Promise.all(
-      lines.map(async (line) => {
-        imageDir = await join(epubDir, `${curChapter.value?.bookId}`, "images");
-        if (line.includes("src=")) {
-          const imagePath = line.match(/src="([^"]+)"/)[1];
-          const absoluteImagePath = await join(
-            imageDir,
-            imagePath.replace("images/", "")
-          );
-          const base64Image = await loadImage(absoluteImagePath);
-          line = line.replace(/src="[^"]+"/, `src="${base64Image}"`);
-        }
-        return `<p>${line}</p>`;
-      })
-    );
-    formattedContent.value = processedLines.join("");
+  (val) => {
+    getFormattedContent(val);
   },
   { immediate: true }
 );

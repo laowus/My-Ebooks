@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "捡书",
+        "title": "捡书 My Ebooks",
         "width": 1024,
         "height": 768,
         "decorations": false

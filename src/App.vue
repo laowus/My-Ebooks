@@ -1,6 +1,6 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
-import { onMounted, ref, toRaw } from "vue";
+import { toRaw } from "vue";
 import { storeToRefs } from "pinia";
 import { createTOCView } from "./libs/ui/tree.js";
 import EventBus from "./common/EventBus";
