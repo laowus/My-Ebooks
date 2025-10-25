@@ -17,7 +17,6 @@ export const useAppStore = defineStore("appStore", {
     editBookShow: false,
     editBookData: null,
     aboutShow: null,
-    savePath: null,
   }),
   getters: {},
   actions: {
@@ -83,18 +82,5 @@ export const useAppStore = defineStore("appStore", {
       this.tipShow = false;
       this.tipText = null;
     },
-    setSavePath(path) {
-      this.savePath = path;
-    },
-  },
-
-  persist: {
-    enabled: true,
-    strategies: [
-      {
-        storage: localStorage,
-        paths: ["savePath"],
-      },
-    ],
   },
 });

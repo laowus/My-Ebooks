@@ -1,16 +1,16 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { basename, join, appDataDir } from "@tauri-apps/api/path";
-import { writeFile, exists } from "@tauri-apps/plugin-fs";
-import { ref, onMounted, inject, toRaw } from "vue";
+import { join, appDataDir } from "@tauri-apps/api/path";
+import { writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { ref, onMounted, toRaw } from "vue";
 import { storeToRefs } from "pinia";
 import WindowCtr from "./WindowCtr.vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import EventBus from "../common/EventBus";
 import { openFile } from "../libs/parseBook.js";
 import { getChapters } from "../common/funs.js";
-import { createEpub } from "../common/createFile.js";
+import { createEpub, createTxt } from "../common/createFile.js";
 import { readTxtFile, getTextFromHTML } from "../common/utils";
 import { useBookStore } from "../store/bookStore";
 import { useAppStore } from "../store/appStore";
@@ -19,7 +19,6 @@ const { curChapter, metaData, isFirst, toc, isAllEdit, isTitleIn } =
   storeToRefs(useBookStore());
 const { setMetaData, setFirst, setIsAllEdit, setTitleIn } = useBookStore();
 const { showHistoryView, showNewBook, showAbout, setSavePath } = useAppStore();
-const { savePath } = storeToRefs(useAppStore());
 
 const curIndex = ref(1);
 const indentNum = ref(2);
@@ -398,15 +397,8 @@ const exportBookToEpub = async () => {
     const defaultFileName = `${sanitizeFilename(
       metaData.value.title || "未命名"
     )}.epub`;
-    // 判断是否存在默认文件名，如果存在，则使用默认文件名，否则使用默认文件名
-    if (savePath.value) {
-      //判断目录是否存在
-      if (!(await exists(savePath.value))) {
-        console.log("保存路径不存在");
-        setSavePath(await appDataDir());
-      }
-    }
-    const defaultPath = await join(svPath, defaultFileName);
+
+    const defaultPath = await join(await appDataDir(), defaultFileName);
     const selectedPath = await save({
       title: "保存 EPUB 文件",
       defaultPath: defaultPath,
@@ -443,8 +435,93 @@ const exportBookToEpub = async () => {
       );
     }
   } catch (error) {
-    console.error("导出 EPUB 失败:", error);
-    ElMessage.error("生成 EPUB 文件失败");
+    console.error("打开选择文件对话框失败:", error);
+  }
+};
+
+const exportBookToHtml = async () => {
+  try {
+    const defaultFileName = `${sanitizeFilename(
+      metaData.value.title || "未命名"
+    )}.html`;
+    const defaultPath = await join(await appDataDir(), defaultFileName);
+    const selectedPath = await save({
+      title: "保存 HTML 文件",
+      defaultPath: defaultPath,
+      filters: [
+        {
+          name: "HTML 文件",
+          extensions: ["html"],
+        },
+        {
+          name: "所有文件",
+          extensions: ["*"],
+        },
+      ],
+    });
+    if (!selectedPath) {
+      console.log("用户取消了保存");
+      return null;
+    } else {
+      // 创建 Html 文件
+      createHtml(toc.value).then(async (txtContent) => {
+        const htmlContent = txtToHtmlString(txtContent, metaData.value.title);
+        // 3. 写入文件
+        writeTextFile(selectedPath, htmlContent)
+          .then(() => {
+            ElMessage.success(`HTML 文件已生成: ${selectedPath}`);
+          })
+          .catch((err) => {
+            console.error("写入 HTML 文件失败:", err);
+            ElMessage.error("生成 HTML 文件失败");
+          });
+      });
+    }
+  } catch (error) {
+    console.error("打开选择文件对话框失败:", error);
+  }
+};
+
+const exportBookToTxt = async () => {
+  try {
+    const defaultFileName = `${sanitizeFilename(
+      metaData.value.title || "未命名"
+    )}.txt`;
+    const defaultPath = await join(await appDataDir(), defaultFileName);
+    const selectedPath = await save({
+      title: "保存Txt文件",
+      defaultPath: defaultPath,
+      filters: [
+        {
+          name: "Txt 文件",
+          extensions: ["txt"],
+        },
+        {
+          name: "所有文件",
+          extensions: ["*"],
+        },
+      ],
+    });
+    if (!selectedPath) {
+      console.log("用户取消了保存");
+      return null;
+    } else {
+      // 创建 Html 文件
+      createTxt(toRaw(toc.value)).then(async (txtContent) => {
+        // 3. 写入文件
+
+        writeTextFile(selectedPath, txtContent)
+          .then(() => {
+            ElMessage.success(`Txt 文件已生成: ${selectedPath}`);
+          })
+          .catch((err) => {
+            console.error("写入 Txt 文件失败:", err);
+            ElMessage.error("生成 Txt 文件失败");
+          });
+      });
+    }
+  } catch (error) {
+    console.error("打开选择文件对话框失败:", error);
   }
 };
 </script>
@@ -642,11 +719,19 @@ const exportBookToEpub = async () => {
             <span class="iconfont icon-daochuexl" style="color: green"></span>
             <span>生成epub</span>
           </button>
-          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+          <button
+            class="btn-icon"
+            @click="exportBookToTxt"
+            :disabled="!curChapter.bookId"
+          >
             <span class="iconfont icon-daochutxt" style="color: green"></span>
             <span>生成txt</span>
           </button>
-          <button class="btn-icon" @click="" :disabled="!curChapter.bookId">
+          <button
+            class="btn-icon"
+            @click="exportBookToHtml"
+            :disabled="!curChapter.bookId"
+          >
             <span class="iconfont icon-HTML" style="color: green"></span>
             <span>生成Html</span>
           </button>
