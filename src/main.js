@@ -7,7 +7,6 @@ import "./assets/styles/global.css";
 import "./assets/styles/iconfont/iconfont.css";
 import { createPinia } from "pinia";
 import piniaPersist from "pinia-plugin-persist";
-
 //状态管理
 const pinia = createPinia();
 pinia.use(piniaPersist);

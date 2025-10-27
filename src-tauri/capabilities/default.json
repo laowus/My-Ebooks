@@ -12,7 +12,7 @@
     "fs:scope-appdata-recursive",
     "fs:allow-appdata-read",
     "fs:allow-appdata-write",
-    "fs:allow-appdata-write-recursive",
+    "core:path:default",
     "opener:default",
     "core:window:allow-maximize",
     "core:window:allow-minimize",

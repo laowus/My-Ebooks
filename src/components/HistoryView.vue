@@ -17,7 +17,6 @@ const books = ref([]);
 const fetchBooks = () => {
   invoke("get_all_books")
     .then((booksData) => {
-      console.log("Fetched books data:", booksData);
       books.value = booksData.data;
     })
     .catch((error) => {

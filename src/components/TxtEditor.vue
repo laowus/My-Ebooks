@@ -1,11 +1,12 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
+import { join, appDataDir } from "@tauri-apps/api/path";
+import { exists, readDir } from "@tauri-apps/plugin-fs";
+import { save } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { ref, watch, onMounted, toRaw } from "vue";
 import { storeToRefs } from "pinia";
 import { useBookStore } from "../store/bookStore";
-import { join, appDataDir } from "@tauri-apps/api/path";
-import { exists } from "@tauri-apps/plugin-fs";
-import { loadImage } from "../common/utils";
 
 const { curChapter, selectColor } = storeToRefs(useBookStore());
 
@@ -95,7 +96,7 @@ const getFormattedContent = async (content) => {
   imageDir = await join(epubDir, `${curChapter.value?.bookId}`, "images");
   const dirExists = await exists(imageDir);
   if (dirExists) {
-    const files = await readdir(imageDir);
+    const files = await readDir(imageDir);
     if (files.length > 0) {
       const lines = content.split("\n").filter((line) => line.trim() !== "");
       const processedLines = await Promise.all(
@@ -106,8 +107,8 @@ const getFormattedContent = async (content) => {
               imageDir,
               imagePath.replace("images/", "")
             );
-            const base64Image = await loadImage(absoluteImagePath);
-            line = line.replace(/src="[^"]+"/, `src="${base64Image}"`);
+            const imageUrl = convertFileSrc(absoluteImagePath);
+            line = line.replace(/src="[^"]+"/, `src="${imageUrl}"`);
           }
           return `<p>${line}</p>`;
         })
@@ -126,6 +127,122 @@ watch(
   },
   { immediate: true }
 );
+
+// 添加斜体格式化功能
+const formatTag = (tag) => {
+  if (!editArea.value) return;
+
+  const textarea = editArea.value;
+  const { selectionStart, selectionEnd, value } = textarea;
+
+  // 获取选中的文本
+  const selectedText = value.substring(selectionStart, selectionEnd);
+  //判断selectedText 是否包含tag
+  if (selectedText === "" || selectedText.length === 0) {
+    ElMessage({
+      message: "请先选择文本",
+      type: "warning",
+    });
+    return;
+  }
+  const formattedText = `<${tag}>${selectedText}</${tag}>`;
+
+  // 更新文本内容
+  const newContent =
+    value.substring(0, selectionStart) +
+    formattedText +
+    value.substring(selectionEnd);
+
+  // 保存当前章节内容
+  curChapter.value.content = newContent;
+};
+
+const addImage = async () => {
+  if (!editArea.value) return;
+  try {
+    const defaultFileName = `${sanitizeFilename(
+      metaData.value.title || "未命名"
+    )}.epub`;
+
+    const defaultPath = await join(await appDataDir(), defaultFileName);
+    const selectedPath = await save({
+      title: "保存 EPUB 文件",
+      defaultPath: defaultPath,
+      filters: [
+        {
+          name: "EPUB 文件",
+          extensions: ["epub"],
+        },
+        {
+          name: "所有文件",
+          extensions: ["*"],
+        },
+      ],
+    });
+  } catch (error) {
+    console.error(error);
+  }
+
+  ipcRenderer
+    .invoke("select-image", `${curChapter.value?.bookId}`)
+    .then((imagePath) => {
+      if (!imagePath) return; // 用户取消选择
+
+      const imgUrl = imagePath;
+
+      // 创建图片标签
+      const imgTag = `<img src="images/${imgUrl}" />`;
+
+      const textarea = editArea.value;
+      const { selectionStart, selectionEnd, value } = textarea;
+
+      // 在光标位置插入图片标签
+      const newContent =
+        value.substring(0, selectionStart) +
+        imgTag +
+        value.substring(selectionEnd);
+
+      // 更新内容
+      curChapter.value.content = newContent;
+    })
+    .catch((err) => {
+      console.error("图片选择失败:", err);
+      ElMessage.error("图片选择失败");
+    });
+};
+
+const insertStyle = (styleStr) => {
+  if (!editArea.value) return;
+
+  // 获取textarea和选中信息
+  const textarea = editArea.value;
+  const { selectionStart, selectionEnd, value } = textarea;
+  const selectedText = value.substring(selectionStart, selectionEnd);
+
+  if (!selectedText) return; // 如果没有选中文字，直接返回
+
+  // 按换行符分割选中的文字
+  const lines = selectedText.split("\n");
+
+  // 给每段添加span标签
+  const formattedLines = lines.map((line) => {
+    if (styleStr.ty === "color")
+      return `<span style="color: ${styleStr.val}">${line}</span>`;
+    else if (styleStr.ty === "align")
+      return `<p style="text-align: ${styleStr.val};">${line}</p>`;
+  });
+
+  // 用<br>连接处理后的段落，保持原来的换行效果
+  const formattedText = formattedLines.join("\n");
+
+  // 更新内容
+  const newContent =
+    value.substring(0, selectionStart) +
+    formattedText +
+    value.substring(selectionEnd);
+
+  curChapter.value.content = newContent;
+};
 </script>
 
 <template>
@@ -139,6 +256,64 @@ watch(
           预览
         </button>
       </div>
+    </div>
+    <div class="edit-bar" v-if="curTabIndex === 0 && curChapter.content !== ''">
+      <button class="btn-icon-normal" title="添加图片" @click="addImage">
+        <span class="iconfont icon-tianjiatupian"></span>
+      </button>
+      <button class="btn-icon-normal" title="斜体" @click="formatTag('i')">
+        <span class="iconfont icon-zitixieti"></span>
+      </button>
+      <button class="btn-icon-normal" title="下划线" @click="formatTag('u')">
+        <span class="iconfont icon-zitixiahuaxian"></span>
+      </button>
+      <button class="btn-icon-normal" title="加粗" @click="formatTag('b')">
+        <span class="iconfont icon-zitijiacu"></span>
+      </button>
+      <div class="color-select-wrapper">
+        <button
+          class="btn-icon-small"
+          title="颜色"
+          @click="insertStyle({ ty: 'color', val: selectColor })"
+        >
+          <span
+            class="iconfont icon-yanseban"
+            :style="{ color: selectColor }"
+          ></span>
+        </button>
+        <input
+          class="select-panel"
+          type="color"
+          v-model="selectColor"
+          title="选择颜色"
+        />
+      </div>
+      <div class="color-select-wrapper">
+        <button
+          class="btn-icon-small"
+          title="居左"
+          @click="insertStyle({ ty: 'align', val: 'left' })"
+        >
+          <span class="iconfont icon-juzuo"></span>
+        </button>
+        <button
+          class="btn-icon-small"
+          title="居中"
+          @click="insertStyle({ ty: 'align', val: 'center' })"
+        >
+          <span class="iconfont icon-juzhongduiqi"></span>
+        </button>
+        <button
+          class="btn-icon-small"
+          title="居右"
+          @click="insertStyle({ ty: 'align', val: 'right' })"
+        >
+          <span class="iconfont icon-juyou"></span>
+        </button>
+      </div>
+      <button class="btn-icon-normal" title="查找替换" @click="">
+        <span class="iconfont icon-chazhaotihuan"></span>
+      </button>
     </div>
     <div class="line-edit-wrapper" v-if="curTabIndex === 0">
       <div class="left-bar-wrapper">

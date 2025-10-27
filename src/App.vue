@@ -29,7 +29,7 @@ const updateTocView = (curhref) => {
     },
     (href, event) => {
       updateCurChapter(href);
-      //showContextMenu(event, href);
+      showContextMenu(event, href);
     },
     (fromHref, toHref) => {
       console.log("移动目录", fromHref, toHref);
@@ -41,7 +41,15 @@ const updateTocView = (curhref) => {
   tocView.setCurrentHref(curhref);
   updateCurChapter(curhref);
 };
-
+const showContextMenu = (event, href) => {
+  event.preventDefault();
+  setTimeout(() => {
+    //初始化菜单数据
+    EventBus.emit("commonCtxMenu-init", 0);
+    //显示菜单
+    EventBus.emit("commonCtxMenu-show", event);
+  }, 99);
+};
 const updateCurChapter = (href) => {
   invoke("get_chapter", {
     id: String(href),
