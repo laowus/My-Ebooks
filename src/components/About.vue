@@ -1,6 +1,9 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
-import { appDataDir } from "@tauri-apps/api/path";
+import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
+import { appDataDir, join } from "@tauri-apps/api/path";
+import { createBackZip, unzipFileWithJSZip } from "../common/createFile.js";
 import { open } from "@tauri-apps/plugin-shell";
 import { ref, onMounted } from "vue";
 import { storeToRefs } from "pinia";
@@ -23,7 +26,7 @@ const tabContents = ref([
 
   开源地址：<button @click='openUrl'>https://github.com/laowus/My-Ebooksk</button>
   如有问题可以以下方式进行联系：
-      邮箱：pjhxl@qq.com 
+      邮箱：pjhxl@qq.com
       Q Q：37156760
       QQ群：616712461
   `,
@@ -40,32 +43,121 @@ onMounted(async () => {
   dataDir = await appDataDir();
 });
 
-// 在script部分末尾添加以下方法
-const backupData = () => {
-  // ipcRenderer.once("backup-data-reply", (event, res) => {
-  //   if (res.success) {
-  //     ElMessage.success(res.message);
-  //   } else {
-  //     ElMessage.error(res.message);
-  //   }
-  // });
-  // ipcRenderer.send("backup-data", dataDir.value);
+//把应用目录下面的所有文件都打包成一个zip文件
+const backupData = async () => {
+  try {
+    // 1. 弹出保存对话框，获取用户选择的保存路径
+    const timemap = new Date().getTime();
+    const defaultFileName = `${timemap}.zip`;
+
+    const defaultPath = await join(await appDataDir(), defaultFileName);
+    const selectedPath = await save({
+      title: "保存 备份 文件",
+      defaultPath: defaultPath,
+      filters: [
+        {
+          name: "zip 文件",
+          extensions: ["zip"],
+        },
+        {
+          name: "所有文件",
+          extensions: ["*"],
+        },
+      ],
+    });
+
+    // 2. 检查用户是否取消了保存
+    if (!selectedPath) {
+      console.log("用户取消了保存");
+      return null;
+    } else {
+      // 创建 EPUB 文件
+      createBackZip().then(async (reszip) => {
+        // 3. 写入文件
+        writeFile(selectedPath, reszip)
+          .then(() => {
+            ElMessage.success(`备份文件已生成: ${selectedPath}`);
+          })
+          .catch((err) => {
+            console.error("写入备份文件失败:", err);
+            ElMessage.error("生成备份文件失败");
+          });
+      });
+    }
+  } catch (error) {
+    console.error("打开选择文件对话框失败:", error);
+  }
 };
 
-const restoreData = () => {
-  // 先确认是否覆盖现有数据
-  ElMessageBox.confirm("恢复数据将覆盖现有数据，确定要继续吗？", "恢复数据", {
-    confirmButtonText: "确定",
-    cancelButtonText: "取消",
-    type: "warning",
-  })
-    .then(() => {})
-    .catch(() => {
-      ElMessage({
-        type: "info",
-        message: "已取消恢复数据",
+const restoreData = async () => {
+  const _appDataDir = await appDataDir();
+  const selected = await openDialog({
+    title: "选择备份文件",
+    filters: [
+      {
+        name: "zip 文件",
+        extensions: ["zip"],
+      },
+      {
+        name: "所有文件",
+        extensions: ["*"],
+      },
+    ],
+    defaultPath: _appDataDir,
+  });
+  if (selected) {
+    // 处理选中的文件
+    console.log("选中的文件:", selected);
+    // 先确认是否覆盖现有数据
+    ElMessageBox.confirm("恢复数据将覆盖现有数据，确定要继续吗？", "恢复数据", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+      type: "warning",
+    })
+      .then(async () => {
+        //删除应用目录下面的所有文件
+        await invoke("close_database").then(async (closeResult) => {
+          if (closeResult.success) {
+            try {
+              await invoke("clear_app_data")
+                .then(async () => {
+                  console.log("App data cleared successfully");
+                  // 使用JSZip解压文件
+                  await unzipFileWithJSZip(selected, _appDataDir)
+                    .then(async (unzipResult) => {
+                      console.log("解压缩文件成功:", unzipResult);
+                      ElMessage.success("数据恢复成功！");
+                      // invoke("restart_app")
+                      //   .then(() => {
+                      //     console.log("App is restarting...");
+                      //   })
+                      //   .catch((error) => {
+                      //     console.error("Error restarting app:", error);
+                      //   });
+                    })
+                    .catch((error) => {
+                      console.error("解压缩文件失败:", error);
+                      ElMessage.error("数据恢复失败！");
+                    });
+                })
+                .catch((error) => {
+                  console.error("Error clearing app data:", error);
+                });
+            } catch (error) {
+              showTip(`清除应用数据失败: ${error}`);
+            }
+          }
+        });
+      })
+      .catch(() => {
+        ElMessage({
+          type: "info",
+          message: "已取消恢复数据",
+        });
       });
-    });
+  } else {
+    console.log("用户取消了选择");
+  }
 };
 
 const openUrl = async () => {
@@ -158,20 +250,19 @@ const openDataDir = async () => {
         <div v-else-if="tindex === 2" class="content-item">
           <div class="backup-restore">
             <div class="data-top">
-              <h2>备份/恢复功能：</h2>
-              <p>
-                您可以使用备份/恢复功能来备份您的书籍数据，以及在需要时恢复备份。这对于保护您的书籍数据免受意外删除或损坏非常重要。
-              </p>
+              <h3>备份/恢复功能：</h3>
+
+              您可以使用备份/恢复功能来备份您的书籍数据，以及在需要时恢复备份。这对于保护您的书籍数据免受意外删除或损坏非常重要。
             </div>
             <div class="data-content">
-              <h2>数据保存位置：</h2>
+              <h3>数据保存位置：</h3>
               <p>
                 {{ dataDir }}
                 <el-button type="primary" @click="openDataDir">
                   打开
                 </el-button>
               </p>
-              <h2>备份/恢复操作：</h2>
+              <h3>备份/恢复操作：</h3>
               <p>
                 1、备份：点击备份按钮，会在数据保存位置生成一个压缩zip文件，备份文件中包含了所有的书籍数据。
                 <br />
@@ -226,7 +317,7 @@ const openDataDir = async () => {
 .tab-nav {
   display: flex;
   border-bottom: 1px solid #e0e0e0;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .tab-item {

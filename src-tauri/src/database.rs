@@ -181,6 +181,35 @@ pub async fn add_book(
     }
 }
 
+// 更新章节内容（允许 content 为空）
+#[command]
+pub fn update_chapter(
+    id: i64,
+    label: String,
+    content: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<DbResponse<()>, String> {
+    let db = get_db_connection(&state)?;
+    let current_time = get_current_time_string();
+
+    let sql = if content.is_none() {
+        "UPDATE ee_chapter SET label = ?, updateTime = ? WHERE id = ?"
+    } else {
+        "UPDATE ee_chapter SET label = ?, content = ?, updateTime = ? WHERE id = ?"
+    };
+
+    let params = if content.is_none() {
+        params![label, current_time, id]
+    } else {
+        params![label, content.unwrap(), current_time, id]
+    };
+
+    match db.execute(sql, params) {
+        Ok(_) => Ok(DbResponse::success(())),
+        Err(err) => Ok(DbResponse::error(err.to_string())),
+    }
+}
+
 // 获取所有书籍
 #[command]
 pub fn get_all_books(state: State<'_, AppState>) -> Result<DbResponse<Vec<Book>>, String> {
@@ -372,30 +401,6 @@ pub fn get_chapter_where(
     Ok(DbResponse::success(chapters))
 }
 
-#[command]
-pub fn update_chapter(
-    id: i64,
-    label: String,
-    content: String,
-    state: State<'_, AppState>,
-) -> Result<DbResponse<i64>, String> {
-    let db = get_db_connection(&state)?;
-
-    // 执行更新操作
-    match db.execute(
-        "UPDATE ee_chapter SET content = ?, label = ?, updateTime = datetime('now', 'localtime') WHERE id = ?",
-        params![content, label, id],
-    ) {
-        Ok(_) => {
-            // 返回成功响应，包含更新的行数
-            Ok(DbResponse::success(1))
-        },
-        Err(err) => {
-            // 构建错误响应
-            Ok(DbResponse::error(err.to_string()))
-        }
-    }
-}
 #[command]
 pub fn delete_book(id: i64, state: State<'_, AppState>) -> Result<DbResponse<i64>, String> {
     let db = get_db_connection(&state)?;

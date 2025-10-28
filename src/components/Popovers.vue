@@ -1,4 +1,5 @@
 <script setup>
+import { reactive } from "vue";
 import { storeToRefs } from "pinia";
 import EventBus from "../common/EventBus";
 import { useAppStore } from "../store/appStore";
@@ -7,6 +8,8 @@ import EditBook from "./EditBook.vue";
 import NewBook from "./NewBook.vue";
 import HistoryView from "./HistoryView.vue";
 import About from "./About.vue";
+import EditView from "./EditView.vue";
+import ContextMenu from "./ContextMenu.vue";
 const { ctxMenuShow, ctxMenuData, ctxMenuSeparatorNums, tipShow, tipText } =
   storeToRefs(useAppStore());
 const { hideCtxMenu, showCtxMenu, showTip, hideTip } = useAppStore();
@@ -69,6 +72,7 @@ EventBus.on("hideTip", (text = "完成!") => {
 <template>
   <div id="popovers">
     <HistoryView> </HistoryView>
+    <EditView> </EditView>
     <EditBook> </EditBook>
     <NewBook> </NewBook>
     <About> </About>

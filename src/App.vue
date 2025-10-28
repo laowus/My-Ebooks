@@ -1,6 +1,6 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
-import { toRaw } from "vue";
+import { toRaw, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { createTOCView } from "./libs/ui/tree.js";
 import EventBus from "./common/EventBus";
@@ -32,7 +32,7 @@ const updateTocView = (curhref) => {
       showContextMenu(event, href);
     },
     (fromHref, toHref) => {
-      console.log("移动目录", fromHref, toHref);
+      onDrop(fromHref, toHref);
     }
   );
   const tocViewElement = window.$("#toc-view");
@@ -40,6 +40,10 @@ const updateTocView = (curhref) => {
   tocViewElement.append(tocView.element);
   tocView.setCurrentHref(curhref);
   updateCurChapter(curhref);
+};
+
+const onDrop = (fromHref, toHref) => {
+  moveToc(fromHref, toHref);
 };
 const showContextMenu = (event, href) => {
   event.preventDefault();
@@ -74,6 +78,16 @@ EventBus.on("updateToc", (href) => {
     const tocViewElement = window.$("#toc-view");
     tocViewElement.innerHTML = "";
   }
+});
+
+onMounted(() => {
+  document.addEventListener("click", (event) => {
+    // 若点击源不是 Popovers 组件，隐藏菜单和编辑视图
+    if (!event.target.closest("#popovers")) {
+      hideCtxMenu();
+      hideEditView();
+    }
+  });
 });
 </script>
 

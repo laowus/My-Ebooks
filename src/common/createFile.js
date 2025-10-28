@@ -1,7 +1,13 @@
 import JSZip from "jszip";
 import { invoke } from "@tauri-apps/api/core";
-import { exists, readDir, readFile } from "@tauri-apps/plugin-fs";
-import { join, appDataDir } from "@tauri-apps/api/path";
+import {
+  exists,
+  readDir,
+  readFile,
+  writeFile,
+  mkdir,
+} from "@tauri-apps/plugin-fs";
+import { join, appDataDir, dirname, basename } from "@tauri-apps/api/path";
 import EventBus from "./EventBus";
 
 // 递归生成 navPoints 的函数
@@ -338,3 +344,68 @@ export const createHtml = async (chapters, title) => {
     throw err;
   }
 };
+
+/**
+ * 打包应用目录为ZIP文件
+ * @param {string} sourceDir - 要打包的源目录路径
+ * @param {string} zipFilePath - 输出的ZIP文件路径
+ * @returns {Promise<void>}
+ */
+export const createBackZip = async () => {
+  try {
+    // 创建JSZip实例
+    const zip = new JSZip();
+    const _appData = await appDataDir();
+    await addDirectoryToZip(zip, _appData, "");
+    const appDataZip = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "DEFLATE",
+      compressionOptions: {
+        level: 6,
+      },
+    });
+
+    return appDataZip;
+  } catch (error) {
+    console.error("打包目录失败:", error);
+  }
+};
+/**
+ * 递归将目录内容添加到ZIP
+ * @param {JSZip} zip - JSZip实例
+ * @param {string} dirPath - 当前目录路径
+ * @param {string} zipPath - 在ZIP中的路径
+ */
+async function addDirectoryToZip(zip, dirPath, zipPath) {
+  const entries = await readDir(dirPath);
+
+  for (const entry of entries) {
+    const fullPath = await join(dirPath, entry.name);
+    const relativePath = zipPath ? `${zipPath}/${entry.name}` : entry.name;
+
+    // 如果是目录，递归处理
+    if (entry.children) {
+      await addDirectoryToZip(zip, fullPath, relativePath);
+    } else {
+      // 如果是文件，读取并添加到ZIP
+      const fileContent = await readFile(fullPath);
+      zip.file(relativePath, fileContent);
+    }
+  }
+}
+
+    }
+
+/**
+ * 将File对象或Blob对象转换为ArrayBuffer
+ * @param {File|Blob} file - 要转换的文件对象
+ * @returns {Promise<ArrayBuffer>}
+ */
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}

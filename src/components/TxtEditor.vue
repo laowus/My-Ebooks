@@ -46,7 +46,6 @@ const scrollRightWrapperToTop = () => {
 watch(
   curChapter,
   (val) => {
-    console.log(val);
     queueMicrotask(() => {
       const textarea = editArea.value;
       if (!textarea) return;
@@ -159,56 +158,6 @@ const formatTag = (tag) => {
 
 const addImage = async () => {
   if (!editArea.value) return;
-  try {
-    const defaultFileName = `${sanitizeFilename(
-      metaData.value.title || "未命名"
-    )}.epub`;
-
-    const defaultPath = await join(await appDataDir(), defaultFileName);
-    const selectedPath = await save({
-      title: "保存 EPUB 文件",
-      defaultPath: defaultPath,
-      filters: [
-        {
-          name: "EPUB 文件",
-          extensions: ["epub"],
-        },
-        {
-          name: "所有文件",
-          extensions: ["*"],
-        },
-      ],
-    });
-  } catch (error) {
-    console.error(error);
-  }
-
-  ipcRenderer
-    .invoke("select-image", `${curChapter.value?.bookId}`)
-    .then((imagePath) => {
-      if (!imagePath) return; // 用户取消选择
-
-      const imgUrl = imagePath;
-
-      // 创建图片标签
-      const imgTag = `<img src="images/${imgUrl}" />`;
-
-      const textarea = editArea.value;
-      const { selectionStart, selectionEnd, value } = textarea;
-
-      // 在光标位置插入图片标签
-      const newContent =
-        value.substring(0, selectionStart) +
-        imgTag +
-        value.substring(selectionEnd);
-
-      // 更新内容
-      curChapter.value.content = newContent;
-    })
-    .catch((err) => {
-      console.error("图片选择失败:", err);
-      ElMessage.error("图片选择失败");
-    });
 };
 
 const insertStyle = (styleStr) => {

@@ -15,11 +15,12 @@
         "title": "捡书 My Ebooks",
         "width": 1024,
         "height": 768,
-        "decorations": false
+        "decorations": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": "asset: https://asset.localhost",
+      "csp": "asset: https://asset.localhost ;",
       "assetProtocol": {
         "enable": true,
         "scope": ["/**"]
