@@ -24,6 +24,8 @@ pub fn run() {
             fileutil::clear_app_data,
             fileutil::restart_app,
             fileutil::open_folder,
+            fileutil::zip_app_directory,
+            fileutil::unzip_file, 
         ])
         .setup(setup::setup_app)
         .run(tauri::generate_context!())

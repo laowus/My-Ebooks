@@ -400,7 +400,7 @@ function sanitizeFilename(filename) {
 const exportBookToEpub = async () => {
   try {
     // 1. 弹出保存对话框，获取用户选择的保存路径
-    const defaultFileName = `${sanitizeFilename(
+    const defaultFileName = `${metaData.value.author || "佚名"} - ${sanitizeFilename(
       metaData.value.title || "未命名"
     )}.epub`;
 
@@ -503,7 +503,7 @@ const txtToHtmlString = (txt, title) => {
 
 const exportBookToHtml = async () => {
   try {
-    const defaultFileName = `${sanitizeFilename(
+    const defaultFileName = `${metaData.value.author || "佚名"} -${sanitizeFilename(
       metaData.value.title || "未命名"
     )}.html`;
     const defaultPath = await join(await appDataDir(), defaultFileName);
@@ -546,7 +546,7 @@ const exportBookToHtml = async () => {
 
 const exportBookToTxt = async () => {
   try {
-    const defaultFileName = `${sanitizeFilename(
+    const defaultFileName = `${metaData.value.author || "佚名"} - ${sanitizeFilename(
       metaData.value.title || "未命名"
     )}.txt`;
     const defaultPath = await join(await appDataDir(), defaultFileName);

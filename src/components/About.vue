@@ -1,9 +1,7 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
 import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import { createBackZip, unzipFileWithJSZip } from "../common/createFile.js";
 import { open } from "@tauri-apps/plugin-shell";
 import { ref, onMounted } from "vue";
 import { storeToRefs } from "pinia";
@@ -48,7 +46,7 @@ const backupData = async () => {
   try {
     // 1. 弹出保存对话框，获取用户选择的保存路径
     const timemap = new Date().getTime();
-    const defaultFileName = `${timemap}.zip`;
+    const defaultFileName = `backup-${timemap}.zip`;
 
     const defaultPath = await join(await appDataDir(), defaultFileName);
     const selectedPath = await save({
@@ -71,18 +69,8 @@ const backupData = async () => {
       console.log("用户取消了保存");
       return null;
     } else {
-      // 创建 EPUB 文件
-      createBackZip().then(async (reszip) => {
-        // 3. 写入文件
-        writeFile(selectedPath, reszip)
-          .then(() => {
-            ElMessage.success(`备份文件已生成: ${selectedPath}`);
-          })
-          .catch((err) => {
-            console.error("写入备份文件失败:", err);
-            ElMessage.error("生成备份文件失败");
-          });
-      });
+      await invoke("zip_app_directory", { outputPath: selectedPath });
+      ElMessage.success(`备份文件已生成: ${selectedPath}`);
     }
   } catch (error) {
     console.error("打开选择文件对话框失败:", error);
@@ -121,24 +109,19 @@ const restoreData = async () => {
             try {
               await invoke("clear_app_data")
                 .then(async () => {
-                  console.log("App data cleared successfully");
-                  // 使用JSZip解压文件
-                  await unzipFileWithJSZip(selected, _appDataDir)
-                    .then(async (unzipResult) => {
-                      console.log("解压缩文件成功:", unzipResult);
-                      ElMessage.success("数据恢复成功！");
-                      // invoke("restart_app")
-                      //   .then(() => {
-                      //     console.log("App is restarting...");
-                      //   })
-                      //   .catch((error) => {
-                      //     console.error("Error restarting app:", error);
-                      //   });
-                    })
-                    .catch((error) => {
-                      console.error("解压缩文件失败:", error);
-                      ElMessage.error("数据恢复失败！");
+                  try {
+                    await invoke("unzip_file", {
+                      zipFile: selected,
+                      destDir: _appDataDir,
+                    }).then(async () => {
+                      //重启应用
+                      ElMessage.success(`恢复数据成功: ${selected}`);
+                      await invoke("restart_app");
                     });
+                    console.log("解压成功");
+                  } catch (error) {
+                    console.error("解压失败:", error);
+                  }
                 })
                 .catch((error) => {
                   console.error("Error clearing app data:", error);

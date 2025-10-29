@@ -12,6 +12,9 @@
     "fs:scope-appdata-recursive",
     "fs:allow-appdata-read",
     "fs:allow-appdata-write",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-read-dir",
     "core:path:default",
     "opener:default",
     "core:window:allow-maximize",
@@ -21,6 +24,26 @@
     "core:window:allow-is-maximized",
     "dialog:default",
     "dialog:allow-open",
-    "core:window:allow-start-dragging"
+    "core:window:allow-start-dragging",
+    {
+      "identifier": "fs:allow-read",
+      "allow": [
+        { "path": "$APPDATA/covers/*" },
+        { "path": "$APPDATA/epub/*" },
+        { "path": "$APPDATA/books.db" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write",
+      "allow": [
+        { "path": "$APPDATA/covers/*" },
+        { "path": "$APPDATA/books.db" }
+      ]
+    },
+
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "$APPDATA/covers" }, { "path": "$APPDATA/epub" }]
+    }
   ]
 }

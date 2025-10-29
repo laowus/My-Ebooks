@@ -1,12 +1,13 @@
 <script setup>
 import { invoke } from "@tauri-apps/api/core";
-import { ref, watch, toRaw } from "vue";
+import { toRaw } from "vue";
 import { storeToRefs } from "pinia";
 import { useAppStore } from "../store/appStore";
 import { useBookStore } from "../store/bookStore";
 import { saveCoverImage } from "../common/utils";
 import { ElMessage } from "element-plus";
 const { metaData } = storeToRefs(useBookStore());
+const { setMetaData } = useBookStore();
 const { editBookShow, editBookData } = storeToRefs(useAppStore());
 const { hideEditBook, showHistoryView } = useAppStore();
 
@@ -45,6 +46,18 @@ const saveEditBook = async () => {
         console.log(editBookData.value);
         saveCoverImage(editBookData.value.cover, editBookData.value.id);
         ElMessage.success("书籍信息保存成功");
+        console.log("saveEditBook ", editBookData.value);
+        console.log("metaData", metaData.value);
+        //如果当前正在编辑的书籍就是当前书籍 就更新元数据
+        if (metaData.value && metaData.value.bookId == editBookData.value.id) {
+          const newMetaData = {
+            ...metaData.value,
+            title: editBookData.value.title,
+            author: editBookData.value.author,
+          };
+          setMetaData(newMetaData);
+        }
+
         hideEditBook();
         showHistoryView();
       } else {
