@@ -17,17 +17,9 @@ export const useAppStore = defineStore("appStore", {
     editBookShow: false,
     editBookData: null,
     aboutShow: null,
-    paths: {
-      appDir: null,
-      coverPath: null,
-      imagesDir: null,
-    },
   }),
   getters: {},
   actions: {
-    setPaths(paths) {
-      this.paths = paths;
-    },
     setCurrentHref(href) {
       this.currentHref = href;
     },

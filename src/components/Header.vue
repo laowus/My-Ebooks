@@ -5,6 +5,7 @@ import { join, appDataDir } from "@tauri-apps/api/path";
 import { writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { ref, onMounted, toRaw } from "vue";
 import { storeToRefs } from "pinia";
+import * as OpenCC from "opencc-js";
 import WindowCtr from "./WindowCtr.vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import EventBus from "../common/EventBus";
@@ -18,13 +19,16 @@ import { useAppStore } from "../store/appStore";
 const { curChapter, metaData, isFirst, toc, isAllEdit, isTitleIn } =
   storeToRefs(useBookStore());
 const { setMetaData, setFirst, setIsAllEdit, setTitleIn } = useBookStore();
-const { showHistoryView, showNewBook, showAbout, setSavePath } = useAppStore();
+const { showHistoryView, showNewBook, showAbout } = useAppStore();
 
 const curIndex = ref(1);
 const indentNum = ref(2);
 const changeTab = (index) => {
   curIndex.value = index;
 };
+
+const isfang = ref(false);
+
 // 正则表达式
 const reg = {
   pre: ["", "第", "卷", "chapter"],
@@ -400,9 +404,9 @@ function sanitizeFilename(filename) {
 const exportBookToEpub = async () => {
   try {
     // 1. 弹出保存对话框，获取用户选择的保存路径
-    const defaultFileName = `${metaData.value.author || "佚名"} - ${sanitizeFilename(
-      metaData.value.title || "未命名"
-    )}.epub`;
+    const defaultFileName = `${
+      metaData.value.author || "佚名"
+    } - ${sanitizeFilename(metaData.value.title || "未命名")}.epub`;
 
     const defaultPath = await join(await appDataDir(), defaultFileName);
     const selectedPath = await save({
@@ -503,9 +507,9 @@ const txtToHtmlString = (txt, title) => {
 
 const exportBookToHtml = async () => {
   try {
-    const defaultFileName = `${metaData.value.author || "佚名"} -${sanitizeFilename(
-      metaData.value.title || "未命名"
-    )}.html`;
+    const defaultFileName = `${
+      metaData.value.author || "佚名"
+    } -${sanitizeFilename(metaData.value.title || "未命名")}.html`;
     const defaultPath = await join(await appDataDir(), defaultFileName);
     const selectedPath = await save({
       title: "保存 HTML 文件",
@@ -546,9 +550,9 @@ const exportBookToHtml = async () => {
 
 const exportBookToTxt = async () => {
   try {
-    const defaultFileName = `${metaData.value.author || "佚名"} - ${sanitizeFilename(
-      metaData.value.title || "未命名"
-    )}.txt`;
+    const defaultFileName = `${
+      metaData.value.author || "佚名"
+    } - ${sanitizeFilename(metaData.value.title || "未命名")}.txt`;
     const defaultPath = await join(await appDataDir(), defaultFileName);
     const selectedPath = await save({
       title: "保存Txt文件",
@@ -585,6 +589,19 @@ const exportBookToTxt = async () => {
   } catch (error) {
     console.error("打开选择文件对话框失败:", error);
   }
+};
+
+const jianFanZhuanHuan = () => {
+  let converter = OpenCC.Converter(
+    isfang.value ? { from: "cn", to: "hk" } : { from: "hk", to: "cn" }
+  );
+
+  if (curChapter.value.content) {
+    curChapter.value.content = converter(curChapter.value.content);
+    isfang.value = !isfang.value;
+  }
+
+  
 };
 </script>
 <template>
@@ -716,6 +733,14 @@ const exportBookToTxt = async () => {
             <span class="iconfont icon-xinjian"></span>
             <span>添加章名</span>
           </button>
+          <button
+            class="btn-icon"
+            @click="jianFanZhuanHuan"
+            :disabled="!curChapter.bookId"
+          >
+            <span class="iconfont icon-jianfanzhuanhuan"></span>
+            <span>简繁转换</span>
+          </button>
           <button class="btn-icon" @click="setIsAllEdit">
             <span
               class="iconfont"
@@ -777,7 +802,11 @@ const exportBookToTxt = async () => {
           </div>
         </div>
         <div v-show="curIndex === 4">
-          <button class="btn-icon" @click="exportBookToEpub">
+          <button
+            class="btn-icon"
+            @click="exportBookToEpub"
+            :disabled="!curChapter.bookId"
+          >
             <span class="iconfont icon-daochuexl" style="color: green"></span>
             <span>生成epub</span>
           </button>

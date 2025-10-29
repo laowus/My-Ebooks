@@ -6,6 +6,13 @@
   "description": "",
   "glyphs": [
     {
+      "icon_id": "39892025",
+      "name": "简繁转换",
+      "font_class": "jianfanzhuanhuan",
+      "unicode": "e702",
+      "unicode_decimal": 59138
+    },
+    {
       "icon_id": "31190540",
       "name": "全部替换",
       "font_class": "quanbutihuan",
