@@ -18,7 +18,8 @@ import { useAppStore } from "../store/appStore";
 
 const { curChapter, metaData, isFirst, toc, isAllEdit, isTitleIn } =
   storeToRefs(useBookStore());
-const { setMetaData, setFirst, setIsAllEdit, setTitleIn } = useBookStore();
+const { setMetaData, setFirst, setIsAllEdit, setTitleIn, setToc } =
+  useBookStore();
 const { showHistoryView, showNewBook, showAbout } = useAppStore();
 
 const curIndex = ref(1);
@@ -305,6 +306,50 @@ const addTitle = async () => {
   }
 };
 
+const jianFanZhuanHuan = async () => {
+  let converter = OpenCC.Converter(
+    isfang.value ? { from: "cn", to: "hk" } : { from: "hk", to: "cn" }
+  );
+
+  if (curChapter.value.content) {
+    curChapter.value.content = converter(curChapter.value.content);
+    isfang.value = !isfang.value;
+  }
+
+  //章节标题转换
+  if (isAllEdit.value) {
+    const res = await invoke("get_chapter_where", {
+      whereStr: `bookId = ${metaData.value.bookId}`,
+    });
+    if (res.success) {
+      for (const [index, chapter] of res.data.entries()) {
+        chapter.content = converter(chapter.content);
+        chapter.label = converter(chapter.label);
+        iCTip(
+          "处理 " +
+            chapter.label +
+            "  (" +
+            (index + 1) +
+            "/" +
+            res.data.length +
+            ")"
+        );
+        await updateChapter(chapter);
+      }
+      //toc.value 对象 怎么简繁转换
+      console.log(toRaw(toc.value));
+      const tempToc = toRaw(toc.value);
+      tempToc.forEach((item) => {
+        item.label = converter(item.label);
+      });
+      console.log(tempToc);
+      setToc(tempToc);
+      EventBus.emit("hideTip");
+    }
+  }
+};
+// toc 转换 coverter
+
 const regString = () => {
   const pre = $("#pre").value;
   const aft = $("#aft").value;
@@ -589,19 +634,6 @@ const exportBookToTxt = async () => {
   } catch (error) {
     console.error("打开选择文件对话框失败:", error);
   }
-};
-
-const jianFanZhuanHuan = () => {
-  let converter = OpenCC.Converter(
-    isfang.value ? { from: "cn", to: "hk" } : { from: "hk", to: "cn" }
-  );
-
-  if (curChapter.value.content) {
-    curChapter.value.content = converter(curChapter.value.content);
-    isfang.value = !isfang.value;
-  }
-
-  
 };
 </script>
 <template>
