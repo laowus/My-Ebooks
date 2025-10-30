@@ -336,18 +336,30 @@ const jianFanZhuanHuan = async () => {
         );
         await updateChapter(chapter);
       }
-      //toc.value 对象 怎么简繁转换
-      console.log(toRaw(toc.value));
-      const tempToc = toRaw(toc.value);
-      tempToc.forEach((item) => {
-        item.label = converter(item.label);
-      });
-      console.log(tempToc);
-      setToc(tempToc);
+      // 深拷贝TOC对象以避免直接修改原数据
+      const convertedToc = JSON.parse(JSON.stringify(toRaw(toc.value)));
+      console.log(convertedToc);
+      convertLabels(convertedToc, converter);
+      setToc(convertedToc);
+      console.log(convertedToc);
       EventBus.emit("hideTip");
+      EventBus.emit("updateToc", curChapter.value.href);
     }
   }
 };
+
+// 递归转换函数
+const convertLabels = (items, coverter) => {
+  items.forEach((item) => {
+    if (item.label) {
+      item.label = coverter(item.label);
+    }
+    if (item.subitems && Array.isArray(item.subitems)) {
+      convertLabels(item.subitems, coverter);
+    }
+  });
+};
+
 // toc 转换 coverter
 
 const regString = () => {

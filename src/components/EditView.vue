@@ -14,17 +14,18 @@ const updateLabel = async () => {
   console.log("updateChapter", curChapter.value);
   //数据库修改 toc修改
   curChapter.value.label = newLabel.value;
- // ipcRenderer.send("db-update-chapter", toRaw(curChapter.value));
   await invoke("update_chapter", {
     id: curChapter.value.id,
     label: newLabel.value,
-    content: curChapter.value.content
+    content: curChapter.value.content,
   });
   updateTocByHref(curChapter.value);
   hideEditView();
 };
 watch(curChapter, (newVal, oldVal) => {
-  newLabel.value = newVal.label;
+  if (editViewShow.value) {
+    newLabel.value = newVal.label;
+  }
 });
 </script>
 <template>

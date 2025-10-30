@@ -55,6 +55,7 @@ const showContextMenu = (event, href) => {
   }, 99);
 };
 const updateCurChapter = (href) => {
+  console.log("updateCurChapter", href);
   invoke("get_chapter", {
     id: String(href),
   }).then((res) => {

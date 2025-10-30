@@ -179,7 +179,7 @@ const openDataDir = async () => {
       <div class="tab-content">
         <div v-if="tindex === 0" class="content-item">
           <p>
-            YouEbook（捡书） 是一个基于 Vue3 + Electron
+            YouEbook（捡书） 是一个基于 Vue3 + Tauri
             开发的跨平台电子书编辑器，支持 macOS、Windows、Linux
             等操作系统。(本人只有Windows系统电脑, 其他没有平台测试。)
           </p>
