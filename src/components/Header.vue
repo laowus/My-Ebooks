@@ -342,8 +342,9 @@ const jianFanZhuanHuan = async () => {
       convertLabels(convertedToc, converter);
       setToc(convertedToc);
       console.log(convertedToc);
+      console.log("curChapter.value", curChapter.value);
       EventBus.emit("hideTip");
-      EventBus.emit("updateToc", curChapter.value.href);
+      EventBus.emit("updateToc", curChapter.value.id);
     }
   }
 };
