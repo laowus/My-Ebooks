@@ -75,6 +75,7 @@ EventBus.on("updateToc", (href) => {
   if (href) {
     updateTocView(href);
   } else {
+    //清空目录视图
     const tocViewElement = window.$("#toc-view");
     tocViewElement.innerHTML = "";
   }

@@ -1,10 +1,12 @@
 mod database;
 mod fileutil;
 mod setup;
+#[cfg(desktop)]
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
@@ -25,8 +27,18 @@ pub fn run() {
             fileutil::restart_app,
             fileutil::open_folder,
             fileutil::zip_app_directory,
-            fileutil::unzip_file, 
-        ])
+            fileutil::unzip_file,
+        ]);
+
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        let _ = app
+            .get_webview_window("main")
+            .expect("no main window")
+            .set_focus();
+    }));
+
+    builder
         .setup(setup::setup_app)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -132,7 +132,8 @@ pub async fn unzip_file(zip_file: String, dest_dir: String) -> Result<(), String
     // 打开zip文件
     let file = fs::File::open(&zip_file).map_err(|e| format!("无法打开ZIP文件: {}", e))?;
     let reader = io::BufReader::new(file);
-    let mut archive = zip::ZipArchive::new(reader).map_err(|e| format!("解析ZIP文件失败: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(reader).map_err(|e| format!("解析ZIP文件失败: {}", e))?;
 
     // 确保目标目录存在
     fs::create_dir_all(&dest_dir).map_err(|e| format!("无法创建目标目录: {}", e))?;
@@ -140,7 +141,7 @@ pub async fn unzip_file(zip_file: String, dest_dir: String) -> Result<(), String
     // 遍历ZIP中的所有文件并解压
     for i in 0..archive.len() {
         let mut file = match archive.by_index(i) {
-            Ok(file) =>file,
+            Ok(file) => file,
             Err(ZipError::FileNotFound) => continue, // 处理文件未找到的情况
             Err(e) => return Err(format!("读取ZIP条目失败: {}", e)),
         };
@@ -162,21 +163,24 @@ pub async fn unzip_file(zip_file: String, dest_dir: String) -> Result<(), String
             if let Some(parent) = outpath_path.parent() {
                 fs::create_dir_all(parent).map_err(|e| format!("无法创建父目录: {}", e))?;
             }
-            
+
             // 创建目标文件
-            let mut outfile = fs::File::create(outpath_path).map_err(|e| format!("无法创建文件: {}", e))?;
-            
+            let mut outfile =
+                fs::File::create(outpath_path).map_err(|e| format!("无法创建文件: {}", e))?;
+
             // 复制文件内容
             io::copy(&mut file, &mut outfile).map_err(|e| format!("无法写入文件内容: {}", e))?;
-            
+
             // 在Unix上设置文件权限
             #[cfg(unix)]
-            {{
-                use std::os::unix::fs::PermissionsExt;
-                if let Some(mode) = file.unix_mode() {
-                    fs::set_permissions(outpath_path, fs::Permissions::from_mode(mode)).ok();
+            {
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    if let Some(mode) = file.unix_mode() {
+                        fs::set_permissions(outpath_path, fs::Permissions::from_mode(mode)).ok();
+                    }
                 }
-            }}
+            }
         }
     }
 
@@ -187,18 +191,19 @@ pub async fn unzip_file(zip_file: String, dest_dir: String) -> Result<(), String
 fn sanitize_path(dest_dir: &str, file: &ZipFile) -> Result<String, String> {
     let dest_path = Path::new(dest_dir);
     let file_path = Path::new(file.name());
-    
+
     // 确保文件路径是相对路径，防止路径遍历
-    let normalized_path = match file_path.components().all(|c| {
-        !matches!(c, std::path::Component::ParentDir)
-    }) {
+    let normalized_path = match file_path
+        .components()
+        .all(|c| !matches!(c, std::path::Component::ParentDir))
+    {
         true => file_path,
         false => return Err("检测到路径遍历尝试".to_string()),
     };
-    
+
     // 组合目标目录和文件路径
     let combined_path = dest_path.join(normalized_path);
-    
+
     // 确保组合后的路径在目标目录内
     match combined_path.strip_prefix(dest_path) {
         Ok(_) => Ok(combined_path.to_string_lossy().to_string()),

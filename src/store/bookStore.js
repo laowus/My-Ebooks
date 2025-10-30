@@ -1,6 +1,7 @@
 import EventBus from "../common/EventBus";
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
+import { ref } from "vue";
 
 export const useBookStore = defineStore("bookStore", {
   state: () => ({
@@ -41,13 +42,19 @@ export const useBookStore = defineStore("bookStore", {
         for (let i = items.length - 1; i >= 0; i--) {
           const item = items[i];
           if (item.href === href) {
-            items.splice(i, 1);
-            // 先尝试获取前一个元素
-            let refItem = items[i - 1];
-            // 若前一个元素不存在，尝试获取后一个元素
-            if (!refItem) {
-              refItem = items[i];
+            let refItem = null;
+            //加入只有一个元素
+            if (i === 0) {
+              refItem = this.findParentByHref(item.href);
+            } else {
+              // 若前一个元素不存在，尝试获取后一个元素
+              refItem = items[i - 1];
+              if (!refItem) {
+                //如果前一个元素也不存在 再获取后一个元素
+                refItem = item[i + 1];
+              }
             }
+            items.splice(i, 1);
             // 触发更新目录事件，若 refItem 不存在则传入 null
             EventBus.emit("updateToc", refItem ? refItem.href : null);
             return true;
@@ -114,7 +121,7 @@ export const useBookStore = defineStore("bookStore", {
       const fromResult = findItemAndParent(fromHref, this.toc);
       console.log("fromResult", fromResult);
       if (!fromResult) {
-        console.error("未找到要移动的目录项:", fromHref);
+        console.log("未找到要移动的目录项:", fromHref);
         return;
       }
       const {
@@ -130,14 +137,13 @@ export const useBookStore = defineStore("bookStore", {
       // 查找目标项及其父级
       const toResult = findItemAndParent(toHref, this.toc);
       if (!toResult) {
-        console.error("未找到目标目录项:", toHref);
+        console.log("未找到目标目录项:", toHref);
         // 若未找到目标项，将移动项放回原位置
         fromItems.splice(fromIndex, 0, movingItem);
         return;
       }
       const { parent: toParent, index: toIndex, items: toItems } = toResult;
-
-      // 将移动项插入到目标项后面
+      console.log("toResult", toResult);
       toItems.splice(toIndex + 1, 0, movingItem);
 
       // 触发更新目录事件
