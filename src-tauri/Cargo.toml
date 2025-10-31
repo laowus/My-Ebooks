@@ -2,7 +2,7 @@
 name = "my-ebooks"
 version = "0.1.0"
 description = "捡书 2.0"
-authors = ["you"]
+authors = ["黄老五"]
 edition = "2021"
 
 
@@ -22,6 +22,7 @@ tauri-plugin-log = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-os = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2.0.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.33.0", features = ["bundled"] }

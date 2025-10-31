@@ -338,11 +338,19 @@ const jianFanZhuanHuan = async () => {
       }
       // 深拷贝TOC对象以避免直接修改原数据
       const convertedToc = JSON.parse(JSON.stringify(toRaw(toc.value)));
-      console.log(convertedToc);
       convertLabels(convertedToc, converter);
       setToc(convertedToc);
-      console.log(convertedToc);
-      console.log("curChapter.value", curChapter.value);
+      const _metaData = JSON.parse(JSON.stringify(toRaw(metaData.value)));
+      _metaData.title = converter(_metaData.title);
+      _metaData.author = converter(_metaData.author);
+      _metaData.description = converter(_metaData.description);
+      setMetaData(_metaData);
+      await invoke("update_book", {
+        id: _metaData.bookId,
+        title: _metaData.title,
+        author: _metaData.author,
+        description: _metaData.description,
+      });
       EventBus.emit("hideTip");
       EventBus.emit("updateToc", curChapter.value.id);
     }

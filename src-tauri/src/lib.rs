@@ -1,8 +1,13 @@
 mod database;
 mod fileutil;
 mod setup;
-#[cfg(desktop)]
-use tauri::Manager;
+use tauri::{ Emitter};
+
+#[derive(Clone, serde::Serialize)]
+struct Payload {
+    args: Vec<String>,
+    cwd: String,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,17 +34,14 @@ pub fn run() {
             fileutil::zip_app_directory,
             fileutil::unzip_file,
         ]);
+        
+        // #[cfg(desktop)]
+        // let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+        //     println!("{}, {argv:?}, {cwd}", app.package_info().name);
+        //     app.emit("single-instance", Payload { args: argv, cwd }).unwrap();
+        // }));
 
-    #[cfg(desktop)]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
-        let _ = app
-            .get_webview_window("main")
-            .expect("no main window")
-            .set_focus();
-    }));
-
-    builder
-        .setup(setup::setup_app)
+        builder.setup(setup::setup_app)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

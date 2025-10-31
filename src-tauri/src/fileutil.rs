@@ -1,11 +1,8 @@
 use base64::engine::general_purpose;
 use base64::engine::Engine as _;
-use std::env;
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::thread;
-use std::time::Duration;
 use tauri::{command, AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
 use zip::result::ZipResult;
@@ -33,21 +30,22 @@ pub fn clear_app_data(app_handle: AppHandle) -> Result<(), String> {
     fs::remove_dir_all(app_dir).map_err(|e| e.to_string())?;
     Ok(())
 }
-// 在文件末尾添加重启应用函数
+
 #[command]
 pub async fn restart_app(app_handle: AppHandle) -> Result<(), String> {
     // 获取当前可执行文件路径
-    let exe_path = match env::current_exe() {
+    let exe_path = match std::env::current_exe() {
         Ok(path) => path,
         Err(err) => return Err(format!("获取可执行文件路径失败: {}", err)),
     };
 
-    // 使用ShellExt提供的公开API来启动新进程
-    match app_handle.shell().command(exe_path).spawn() {
+    // 使用链式调用直接创建并启动进程，避免所有权问题
+    match app_handle.shell().command(exe_path).args(&["--restart"]).spawn()
+    {
         Ok(_) => {
             // 延迟一小段时间后关闭当前应用
-            thread::spawn(move || {
-                thread::sleep(Duration::from_millis(500));
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(500));
                 app_handle.exit(0);
             });
             Ok(())
@@ -55,6 +53,7 @@ pub async fn restart_app(app_handle: AppHandle) -> Result<(), String> {
         Err(err) => Err(format!("启动新应用实例失败: {}", err)),
     }
 }
+
 
 #[command]
 pub async fn open_folder(path: String) -> Result<(), String> {
