@@ -1,4 +1,4 @@
-# <div align='center'><img src="https://github.com/laowus/You-Ebook/blob/main/public/icon.png" width="100" height="100"><br/>捡书 My Ebooks</div>
+# <div align='center'><img src="./public/icon.png" width="100" height="100"><br/>捡书 My Ebooks</div>
 
 一款基于 Tauri + Vue 3 开发的电子书编辑器。
 你可以导入一些电子书，合并删除其中的内容，然后生成导出。
@@ -44,14 +44,14 @@ QQ:37156760 (备注：My Ebook)
 
 ### 预览图
 
-![Github snap 1](https://github.com/laowus/You-Ebook/blob/main/snapshot/01.jpg)
-![Github snap 2](https://github.com/laowus/You-Ebook/blob/main/snapshot/02.jpg)
-![Github snap 3](https://github.com/laowus/You-Ebook/blob/main/snapshot/03.jpg)
-![Github snap 4](https://github.com/laowus/You-Ebook/blob/main/snapshot/04.jpg)
-![Github snap 5](https://github.com/laowus/You-Ebook/blob/main/snapshot/05.jpg)
-![Github snap 6](https://github.com/laowus/You-Ebook/blob/main/snapshot/06.jpg)
-![Github snap 7](https://github.com/laowus/You-Ebook/blob/main/snapshot/07.jpg)
-![Github snap 8](https://github.com/laowus/You-Ebook/blob/main/snapshot/08.jpg)
+![Github snap 1](./snapshot/01.jpg)
+![Github snap 2](./snapshot/02.jpg)
+![Github snap 3](./snapshot/03.jpg)
+![Github snap 4](./snapshot/04.jpg)
+![Github snap 5](./snapshot/05.jpg)
+![Github snap 6](./snapshot/06.jpg)
+![Github snap 7](./snapshot/07.jpg)
+![Github snap 8](./snapshot/08.jpg)
 
 ### For 开发者- 请先下载安装最新版（或最新 LTS 版本） [Nodejs](https://nodejs.org/)
 
