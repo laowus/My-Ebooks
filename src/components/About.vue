@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-shell";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { ref, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useAppStore } from "../store/appStore";
@@ -116,7 +117,7 @@ const restoreData = async () => {
                     }).then(async () => {
                       //重启应用
                       ElMessage.success(`恢复数据成功: ${selected}`);
-                      await invoke("restart_app");
+                      relaunch();
                     });
                     console.log("解压成功");
                   } catch (error) {

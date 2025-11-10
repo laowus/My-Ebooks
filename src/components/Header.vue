@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { join, appDataDir } from "@tauri-apps/api/path";
 import { writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { ref, onMounted, toRaw } from "vue";
 import { storeToRefs } from "pinia";
 import * as OpenCC from "opencc-js";
@@ -106,7 +107,7 @@ const restart = () => {
     type: "warning",
   })
     .then(() => {
-      invoke("restart_app");
+      relaunch();
     })
     .catch(() => {
       ElMessage({

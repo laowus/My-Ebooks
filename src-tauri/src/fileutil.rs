@@ -4,7 +4,6 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use tauri::{command, AppHandle, Manager};
-use tauri_plugin_shell::ShellExt;
 use zip::result::ZipResult;
 use zip::write::FileOptions;
 // 添加zip库的读取相关导入
@@ -31,28 +30,6 @@ pub fn clear_app_data(app_handle: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[command]
-pub async fn restart_app(app_handle: AppHandle) -> Result<(), String> {
-    // 获取当前可执行文件路径
-    let exe_path = match std::env::current_exe() {
-        Ok(path) => path,
-        Err(err) => return Err(format!("获取可执行文件路径失败: {}", err)),
-    };
-
-    // 使用链式调用直接创建并启动进程，避免所有权问题
-    match app_handle.shell().command(exe_path).args(&["--restart"]).spawn()
-    {
-        Ok(_) => {
-            // 延迟一小段时间后关闭当前应用
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                app_handle.exit(0);
-            });
-            Ok(())
-        }
-        Err(err) => Err(format!("启动新应用实例失败: {}", err)),
-    }
-}
 
 
 #[command]
